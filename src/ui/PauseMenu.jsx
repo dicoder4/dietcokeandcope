@@ -11,15 +11,15 @@ export default function PauseMenu({ state, onResume, onRestart, onMenu }) {
 
         <div className="stat-grid">
           <div className="stat">
-            <div className="v">{state.stats.placed}</div>
+            <div className="v">{state.counters.placed}</div>
             <div className="k">PLACED</div>
           </div>
           <div className="stat">
-            <div className="v">{state.stats.removed}</div>
+            <div className="v">{state.counters.removed}</div>
             <div className="k">RECLAIMED</div>
           </div>
           <div className="stat">
-            <div className="v">{state.stats.deaths}</div>
+            <div className="v">{state.counters.deaths}</div>
             <div className="k">RESPAWNS</div>
           </div>
           <div className="stat">
@@ -28,12 +28,16 @@ export default function PauseMenu({ state, onResume, onRestart, onMenu }) {
           </div>
         </div>
 
-        <p style={{ marginTop: 20 }}>
-          <b className="gold">OBJECTIVE:</b> {state.objective}
-        </p>
-        <p style={{ fontSize: 13 }}>
-          <b className="gold">HINT:</b> {state.hint}
-        </p>
+        {state.mission && (
+          <p style={{ marginTop: 20 }}>
+            <b className="gold">MISSION:</b> {state.mission.title}
+          </p>
+        )}
+        {state.hint && (
+          <p style={{ fontSize: 13 }}>
+            <b className="gold">HINT:</b> {state.hint}
+          </p>
+        )}
         <p style={{ fontSize: 12, fontStyle: 'italic' }}>{tip}</p>
 
         <div className="row">
