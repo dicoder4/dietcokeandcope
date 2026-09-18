@@ -576,7 +576,7 @@ export function render(ctx, world, view, state) {
 
   // ---- collectibles ----
   for (const c of world.collectibles) {
-    if (c.taken) continue
+    if (c.taken || c.hidden) continue
     const bob = Math.sin(c.bob) * 4
     drawShadowBlob(ctx, world, c.x, c.y)
     if (c.kind === 'brick') {
@@ -610,7 +610,7 @@ export function render(ctx, world, view, state) {
 
   // ---- goals ----
   for (const gl of world.goals) {
-    if (gl.reached) continue
+    if (gl.reached || gl.hidden) continue
     const bob = Math.sin(gl.bob) * 5
     const p = Camera.project(gl.x + 0.5, gl.y + 1)
     // beacon

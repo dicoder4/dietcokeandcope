@@ -88,6 +88,14 @@ for (const def of LEVELS) {
   const world = new World(def, 1280, 720)
   let now = 0
 
+  // Story-gated items (the shawarma does not exist until it is built) start
+  // hidden, which makes them untouchable. This script is a GEOMETRY test —
+  // it asks whether the level can be physically traversed and the goal
+  // physically stood on. Reveal everything so the walk is measuring terrain,
+  // not narrative pacing; the story gating is exercised in the browser.
+  for (const c of world.collectibles) c.hidden = false
+  for (const g of world.goals) g.hidden = false
+
   // --- 1. the real BuildingSystem must accept the reference build ---------
   let placeErrors = 0
   for (const spec of def.reference ?? []) {

@@ -35,6 +35,35 @@ function findNpc(game, id) {
   return game.world.npcs.find((n) => n.id === id) ?? null
 }
 
+/**
+ * Turn the food-builder's selections into a joke score. Not a serious
+ * simulation — every category lands 3-5 stars, "special" picks (fries,
+ * Diet Coke, the correct-answer-shaped choices) nudge it up. The two flat
+ * stats are randomized within a plausible range purely for the gag.
+ */
+function scoreShawarma(fb) {
+  const stars = {}
+  let specials = 0
+  let totalPicks = 0
+  for (const cat of fb.categories) {
+    const ids = fb.selections[cat.key] ?? []
+    totalPicks += ids.length
+    const hasSpecial = cat.options.some((o) => ids.includes(o.id) && o.special)
+    if (hasSpecial) specials++
+    const base = ids.length === 0 ? 3 : 4
+    stars[cat.key] = Math.min(5, base + (hasSpecial ? 1 : 0))
+  }
+  const overall = Math.round(
+    Object.values(stars).reduce((a, b) => a + b, 0) / Object.keys(stars).length
+  )
+  return {
+    stars,
+    overall,
+    messLevel: Math.min(99, 40 + totalPicks * 7 + Math.floor(Math.random() * 15)),
+    sauceChaos: (fb.selections.sauce?.length ?? 0) >= 3 ? 'MAX' : 'MODERATE',
+  }
+}
+
 export const BEATS = {
   /**
    * boot — the BIRTHDAY.EXE opening. Lines appear one at a time on black.
@@ -66,25 +95,31 @@ export const BEATS = {
   },
 
   /**
-   * eyesOpen — the blink-awake transition from black into the world.
+   * eyesOpen — the very first thing the player sees: black, then a blink,
+   * then the eyes open onto the world. No boot text, no menu — this beat
+   * IS the start of the game.
    */
   eyesOpen: {
     enter(dir, beat) {
-      dir.cinematic = { kind: 'eyesOpen', letterbox: true, progress: 0, dur: beat.dur ?? 2.2 }
+      dir.cinematic = { kind: 'eyesOpen', letterbox: true, progress: 0, dur: beat.dur ?? 2.6 }
       dir.controlEnabled = false
     },
     update(dir, beat) {
-      const dur = beat.dur ?? 2.2
+      const dur = beat.dur ?? 2.6
+      // hold a beat past progress=1 so "fully open" is unmistakably the
+      // resting state, not a single frame passed through on the way to exit
+      const holdFrom = dur
+      const holdUntil = dur + (beat.hold ?? 0.5)
       const p = Math.min(1, dir.state.t / dur)
-      dir.cinematic = { ...dir.cinematic, progress: p }
-      dir.game.dirty = true
-      return p >= 1
+      if (dir.cinematic.progress !== p) {
+        dir.cinematic = { ...dir.cinematic, progress: p }
+        dir.game.dirty = true
+      }
+      return dir.state.t >= holdUntil && dir.state.t >= holdFrom
     },
     exit(dir) {
-      // Letterbox stays up until an explicit `letterbox: {on:false}` beat
-      // (or `control` turning input on) drops it — see the `control` and
-      // `letterbox` handlers below.
-      dir.cinematic = { kind: 'idle', letterbox: true }
+      // Eyes are open — drop the letterbox immediately, nothing lingers.
+      dir.cinematic = null
     },
   },
 
@@ -404,6 +439,35 @@ export const BEATS = {
       if (beat.facing !== undefined) n.facing = beat.facing
     },
   },
+  /**
+   * reveal — bring a hidden collectible or goal into the world.
+   *
+   * Items the story has not produced yet start `hidden: true` in the level
+   * definition, so they are neither drawn nor collectable. The shawarma
+   * only exists on the counter once it has actually been built; the Diet
+   * Coke only once it has been ordered. `labels` takes one or more item
+   * labels (matching `label` on the collectible/goal).
+   */
+  reveal: {
+    enter(dir, beat, game) {
+      const labels = Array.isArray(beat.labels) ? beat.labels : [beat.labels]
+      const w = game.world
+      for (const label of labels) {
+        const c = w.collectibles.find((x) => x.label === label)
+        if (c) {
+          c.hidden = false
+          w.spawnParticles(c.x + 0.5, c.y + 0.5, '#ffd166', 18, 1.4)
+        }
+        const g = w.goals.find((x) => x.label === label)
+        if (g) {
+          g.hidden = false
+          w.spawnParticles(g.x + 0.5, g.y + 0.5, '#ffe066', 22, 1.6)
+        }
+      }
+      sfx.pickup()
+    },
+  },
+
   npcHide: {
     enter(dir, beat, game) {
       const n = findNpc(game, beat.id)
@@ -456,6 +520,108 @@ export const BEATS = {
     },
   },
 
+  /**
+   * foodBuilder — the shawarma-construction minigame.
+   *
+   * `beat.categories` is a list of { key, title, subtitle, multi, max,
+   * optional, warnAt, warnReply, options: [{ id, emoji, label, color,
+   * reaction, special }] }. Single-select categories advance the moment an
+   * option is picked; multi-select categories wait for "confirm" (or
+   * "skip" if `optional`). After the last category, the beat holds on a
+   * results screen (star ratings + joke stats) until the player hits
+   * "EAT SHAWARMA" — see FoodBuilder.jsx for the UI this drives.
+   *
+   * All of this lives in dir.foodBuilder, snapshotted whole every frame
+   * like dir.dialogue — it is the UI's only source of truth.
+   */
+  foodBuilder: {
+    enter(dir, beat) {
+      dir.controlEnabled = false
+      dir.foodBuilder = {
+        categories: beat.categories,
+        categoryIndex: 0,
+        selections: {}, // key -> array of option ids
+        reaction: null, // last "Anisha said" line, shown under the cards
+        results: null, // set once every category is done
+      }
+    },
+    update(dir, beat, game) {
+      const fb = dir.foodBuilder
+      const st = dir.state
+
+      if (fb.results) {
+        // Holding on the results screen until the player eats.
+        if (st.foodDone) return true
+        return false
+      }
+
+      const cat = fb.categories[fb.categoryIndex]
+      const picked = fb.selections[cat.key] ?? []
+
+      if (st.foodPick != null) {
+        const opt = cat.options[st.foodPick]
+        st.foodPick = null
+        if (opt) {
+          if (cat.multi) {
+            const already = picked.includes(opt.id)
+            const next = already ? picked.filter((id) => id !== opt.id) : [...picked, opt.id]
+            fb.selections = { ...fb.selections, [cat.key]: next }
+            if (!already && cat.warnAt && next.length >= cat.warnAt) {
+              fb.reaction = cat.warnReply ?? opt.reaction ?? null
+            } else if (!already) {
+              fb.reaction = opt.reaction ?? null
+            }
+            if (opt.special) sfx.pickup()
+            else sfx.select()
+          } else {
+            // single-select: this choice IS the category's answer
+            fb.selections = { ...fb.selections, [cat.key]: [opt.id] }
+            fb.reaction = opt.reaction ?? null
+            sfx.select()
+            if (opt.special) sfx.pickup()
+            st.advanceAfter = 0.55 // let the reaction line land before moving on
+          }
+          game.dirty = true
+        }
+      }
+
+      if (st.foodSkip) {
+        st.foodSkip = false
+        fb.selections = { ...fb.selections, [cat.key]: [] }
+        fb.reaction = null
+        st.advanceAfter = 0.05
+        game.dirty = true
+      }
+
+      if (st.foodConfirm) {
+        st.foodConfirm = false
+        if (cat.multi) st.advanceAfter = 0.05
+      }
+
+      if (st.advanceAfter != null) {
+        st.advanceWaitFrom = st.advanceWaitFrom ?? st.t
+        if (st.t - st.advanceWaitFrom >= st.advanceAfter) {
+          st.advanceAfter = null
+          st.advanceWaitFrom = null
+          if (fb.categoryIndex + 1 < fb.categories.length) {
+            fb.categoryIndex += 1
+            fb.reaction = null
+          } else {
+            fb.results = scoreShawarma(fb)
+            sfx.win()
+          }
+          dir.foodBuilder = { ...fb }
+          game.dirty = true
+        }
+      }
+
+      return false
+    },
+    exit(dir) {
+      dir.foodBuilder = null
+    },
+  },
+
   /** complete — fire the level-complete flow. */
   complete: {
     enter(dir, beat, game) {
@@ -463,7 +629,12 @@ export const BEATS = {
     },
   },
 
-  /** nextLocation — the "NEXT LOCATION… 🎧 MUSIC DISTRICT" teaser card. */
+  /**
+   * nextLocation — the "NEXT LOCATION… 🎧 MUSIC DISTRICT" teaser card.
+   * Pass `hold: true` when there is nothing built after it yet — the beat
+   * then never completes, so the card is the last thing on screen instead
+   * of clearing into blank, uncontrollable gameplay.
+   */
   nextLocation: {
     enter(dir, beat) {
       dir.cinematic = {
@@ -476,6 +647,7 @@ export const BEATS = {
       sfx.fanfare()
     },
     update(dir, beat) {
+      if (beat.hold) return false
       return dir.state.t > (beat.dur ?? 3.4)
     },
     exit(dir) {

@@ -1,11 +1,12 @@
 import React from 'react'
-import { Game, LEVELS } from './game/Game.js'
+import { Game, LEVELS, TOTAL_LEVELS } from './game/Game.js'
 import HUD from './ui/HUD.jsx'
 import MainMenu from './ui/MainMenu.jsx'
 import PauseMenu from './ui/PauseMenu.jsx'
 import LevelComplete from './ui/LevelComplete.jsx'
 import Ending from './ui/Ending.jsx'
 import Dialogue from './ui/Dialogue.jsx'
+import FoodBuilder from './ui/FoodBuilder.jsx'
 import Cinematic, { Banner } from './ui/Cinematic.jsx'
 import gameConfig from './config/gameConfig.js'
 import { setSfxEnabled, resumeAudio } from './game/Sound.js'
@@ -94,13 +95,24 @@ export default function App() {
     const game = gameRef.current
     if (!game) return
     setOutro(false)
-    if (game.levelIndex + 1 >= LEVELS.length) {
+
+    // Only route into the birthday-cake Ending once all four worlds exist.
+    // Right now Level 1 is the only one built: finishing it should land on
+    // its own "NEXT LOCATION" teaser and stop there, not jump to the ending.
+    if (game.levelIndex + 1 >= TOTAL_LEVELS) {
       setFinalStats({ ...game.counters })
       setTreats(new Set(game.treatsFound))
       game.destroy()
       gameRef.current = null
       setComplete(null)
       setScreen('ending')
+      return
+    }
+    if (game.levelIndex + 1 >= LEVELS.length) {
+      // Built levels ran out before the adventure did — nothing further to
+      // load yet. Leave the world exactly as its outro left it (mid
+      // "NEXT LOCATION" card) rather than tearing the game down.
+      setComplete(null)
       return
     }
     setComplete(null)
@@ -206,6 +218,37 @@ export default function App() {
             const g = gameRef.current
             if (!g) return
             g.director.choose(i)
+            g.pushState()
+          }}
+        />
+      )}
+
+      {/* shawarma builder */}
+      {state?.foodBuilder && !complete && (
+        <FoodBuilder
+          builder={state.foodBuilder}
+          onPick={(i) => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.toggleFoodOption(i)
+            g.pushState()
+          }}
+          onConfirm={() => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.confirmFoodCategory()
+            g.pushState()
+          }}
+          onSkip={() => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.skipFoodCategory()
+            g.pushState()
+          }}
+          onEat={() => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.finishFoodBuilder()
             g.pushState()
           }}
         />

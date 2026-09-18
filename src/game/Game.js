@@ -24,12 +24,26 @@ import {
   OUT_OF_BLOCKS,
   INVALID_PLACE,
   LEGO_NAG,
+  LEGO_CONFUSION,
+  LEGO_WOBBLE,
+  BRIDGE_FAIL_QUIPS,
   rand,
 } from '../config/quips.js'
 
 import level1 from '../levels/level1.js'
 
 export const LEVELS = [level1]
+
+/**
+ * The adventure is four worlds (MSRIT shawarma quest, metro headphones, gym
+ * PC build, the bear kitchen), only the first of which is built so far.
+ * `isFinal` below is deliberately NOT `levelIndex === LEVELS.length - 1` —
+ * that would make Level 1 "final" (and route into the birthday-cake Ending
+ * screen) just because it's the only one that exists yet. TOTAL_LEVELS is
+ * the real target; bump it only when a level is actually finished, and it
+ * stays in sync with LEVELS.length once all four are built.
+ */
+export const TOTAL_LEVELS = 4
 
 const RESPAWN_DELAY = 0.85 // seconds — fast retry, per the "failure is fun" rule
 
@@ -59,7 +73,7 @@ export class Game {
     /** run counters (bricks placed, deaths…) — distinct from story stats */
     this.counters = { placed: 0, removed: 0, deaths: 0, treats: 0, clears: 0 }
     /** HP / HAPPINESS / XP — the meters the story awards */
-    this.stats = new Stats({ hp: 60, happiness: 50, xp: 0 })
+    this.stats = new Stats({ hp: 0, happiness: 0, xp: 0 })
     this.director = new Director(this)
     this.treatsFound = new Set()
     this.deathQuip = null
@@ -76,6 +90,7 @@ export class Game {
   destroy() {
     this.running = false
     if (this.rafId) cancelAnimationFrame(this.rafId)
+    clearTimeout(this._bridgeFailBannerT)
     this.input.detach()
     window.removeEventListener('resize', this._onResize)
   }
@@ -99,6 +114,7 @@ export class Game {
     this.deathQuip = null
     this.buildMode = true
     this.toasts = []
+    this._wobbleShown = false
     if (def.startStats) {
       this.stats = new Stats(def.startStats)
     }
@@ -138,7 +154,7 @@ export class Game {
       bricksUsed: this.world.building.placed.length,
       deaths: this.counters.deaths,
       stats: this.stats.snapshot(),
-      isFinal: this.levelIndex === LEVELS.length - 1,
+      isFinal: this.levelIndex === TOTAL_LEVELS - 1,
     })
   }
 
@@ -297,6 +313,17 @@ export class Game {
       if (this.counters.placed === 1) this.onAchievement?.('FIRST BRICK', 'It begins.')
       if (this.counters.placed === 25) this.onAchievement?.('BRICKLAYER', '25 bricks placed.')
       if (res.typeId === 'special') this.onAchievement?.('GOLDEN TOUCH', 'You used the golden brick.')
+
+      const def = LEVELS[this.levelIndex]
+      // a brick landing well away from the gap gets heckled, not helped
+      if (def.gapCenter != null && Math.abs(c.x - def.gapCenter) > 9) {
+        this.toast('Anisha', rand(LEGO_CONFUSION), 'warn', 2.8)
+      }
+      // the first time the span looks like a real, if wobbly, bridge
+      if (b.placed.length === 4 && !this._wobbleShown) {
+        this._wobbleShown = true
+        this.toast('Anisha', rand(LEGO_WOBBLE), 'info', 2.6)
+      }
       // the bridge needs about five bricks. Twelve is a statement.
       if (b.placed.length === 12) {
         this.toast('Structural review', 'Bro is overengineering a bridge.', 'info', 3)
@@ -449,9 +476,29 @@ export class Game {
     sfx.die()
     this.world.camera.kick(0.5)
     this.world.spawnParticles(p.x + 0.5, p.y + 0.5, '#ff7a5c', 24, 1.4)
-    const bank = DEATH_QUIPS[p.deathReason] ?? DEATH_QUIPS.void
-    this.deathQuip = rand(bank)
-    this.toast('OOF', this.deathQuip, 'bad', 2.4)
+
+    const def = LEVELS[this.levelIndex]
+    const inBridgePhase = p.deathReason === 'void' && def.gapCenter != null
+    if (inBridgePhase) {
+      // The brief's exact beat: a "BRIDGE FAILED" card, then Anisha roasts
+      // the architecture. Set outside the beat system (death can happen
+      // mid-any-beat), so it self-clears on a plain timer instead of
+      // relying on a beat's own update() to tear it down.
+      this.director.banner = { lines: ['BRIDGE FAILED'], sub: '', kind: 'bad', born: this.now }
+      clearTimeout(this._bridgeFailBannerT)
+      this._bridgeFailBannerT = setTimeout(() => {
+        if (this.director.banner?.lines?.[0] === 'BRIDGE FAILED') {
+          this.director.banner = null
+          this.dirty = true
+        }
+      }, 2200)
+      this.deathQuip = rand(BRIDGE_FAIL_QUIPS)
+      this.toast('Anisha', this.deathQuip, 'bad', 2.6)
+    } else {
+      const bank = DEATH_QUIPS[p.deathReason] ?? DEATH_QUIPS.void
+      this.deathQuip = rand(bank)
+      this.toast('OOF', this.deathQuip, 'bad', 2.4)
+    }
     if (this.counters.deaths === 5) {
       this.onAchievement?.('PERSISTENCE', 'Five respawns. The build goes on.')
     }
@@ -464,6 +511,10 @@ export class Game {
    */
   respawn() {
     this.world.reset({ keepBuild: true })
+    // The player is back at the level's spawn point, so the story has to go
+    // back with him — otherwise he rebuilds the bridge while a "CROSS THE
+    // GAP" objective from further ahead is still on screen.
+    this.director.rewindToCheckpoint()
     this.deadFor = 0
     this.deathQuip = null
     this.dirty = true

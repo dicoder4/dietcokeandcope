@@ -107,6 +107,10 @@ export class World {
     const savedNpcs = this.npcs?.map((n) => ({ id: n.id, x: n.x, y: n.y, facing: n.facing, hidden: n.hidden }))
     const savedTaken = this.collectibles?.filter((c) => c.taken).map((c) => c.label)
     const savedGoals = this.goals?.filter((g) => g.reached).map((g) => g.label)
+    // Story reveals survive a respawn too: once the shawarma has been built
+    // and put on the counter, dying must not un-build it.
+    const savedShown = this.collectibles?.filter((c) => !c.hidden).map((c) => c.label)
+    const savedShownGoals = this.goals?.filter((g) => !g.hidden).map((g) => g.label)
     const wasComplete = this.complete
 
     this.build(this.def)
@@ -125,6 +129,12 @@ export class World {
     }
     if (savedGoals?.length) {
       for (const g of this.goals) if (savedGoals.includes(g.label)) g.reached = true
+    }
+    if (savedShown?.length) {
+      for (const c of this.collectibles) if (savedShown.includes(c.label)) c.hidden = false
+    }
+    if (savedShownGoals?.length) {
+      for (const g of this.goals) if (savedShownGoals.includes(g.label)) g.hidden = false
     }
 
     if (keepBuild && savedPlaced) {

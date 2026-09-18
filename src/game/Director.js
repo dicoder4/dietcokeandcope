@@ -38,7 +38,16 @@ export class Director {
     this.cinematic = null // { letterbox, lines, title, subtitle, fade, kind }
     this.mission = null // { icon, title, text }
     this.banner = null // { lines, born }
+    this.foodBuilder = null // { categoryIndex, categories, selections, reaction, done, ... }
     this.skipCutscenes = false // headless simulation flag
+    /**
+     * Index of the last beat marked `checkpoint: true`. Dying rewinds the
+     * script here (see rewindToCheckpoint). Without this, falling into the
+     * gap mid-crossing would respawn the player back at the start of the
+     * level while the story carried on without him — he would be rebuilding
+     * the bridge under a "CROSS THE GAP" objective he had already passed.
+     */
+    this.checkpointIndex = -1
   }
 
   load(beats) {
@@ -53,6 +62,8 @@ export class Director {
     this.cinematic = null
     this.mission = null
     this.banner = null
+    this.foodBuilder = null
+    this.checkpointIndex = -1
     if (this.skipCutscenes) {
       // Headless mode: no story, just let the level be playable immediately.
       this.done = true
@@ -84,10 +95,28 @@ export class Director {
       this.advance()
       return
     }
+    if (this.beat.checkpoint) this.checkpointIndex = this.index
     handler.enter?.(this, this.beat, this.game)
     this.game.dirty = true
     // A beat with no update finishes the moment it starts.
     if (!handler.update) this.advance()
+  }
+
+  /**
+   * Death rewinds the script to the last checkpoint so the story and the
+   * player stay in sync. Re-entering that beat re-runs its `enter`, which
+   * restores the mission card, the camera and the control/build flags that
+   * belong to this stretch of the level.
+   */
+  rewindToCheckpoint() {
+    if (this.checkpointIndex < 0 || this.done) return false
+    // clear anything mid-flight from the beat that was interrupted
+    this.dialogue = null
+    this.banner = null
+    this.foodBuilder = null
+    this.index = this.checkpointIndex - 1 // advance() pre-increments
+    this.advance()
+    return true
   }
 
   update(dt) {
@@ -123,12 +152,47 @@ export class Director {
     this.game.dirty = true
   }
 
+  // ---- food-builder progression -----------------------------------------
+  // Mirrors choose()/advanceDialogue() above: the UI reports a pick, the
+  // `foodBuilder` beat's update() (in Beats.js) is what actually reacts to
+  // it on the next tick. Kept as thin writes into `state` for the same
+  // reason `choose` is — the beat owns the state machine, not the Director.
+
+  /** Toggle (multi) or set (single) an option within the current category. */
+  toggleFoodOption(optionIndex) {
+    if (!this.foodBuilder) return
+    this.state.foodPick = optionIndex
+    this.game.dirty = true
+  }
+
+  /** Confirm the current category and move to the next one. */
+  confirmFoodCategory() {
+    if (!this.foodBuilder) return
+    this.state.foodConfirm = true
+    this.game.dirty = true
+  }
+
+  /** Skip an optional category without picking anything. */
+  skipFoodCategory() {
+    if (!this.foodBuilder) return
+    this.state.foodSkip = true
+    this.game.dirty = true
+  }
+
+  /** Called from the results screen's "EAT SHAWARMA" button. */
+  finishFoodBuilder() {
+    if (!this.foodBuilder) return
+    this.state.foodDone = true
+    this.game.dirty = true
+  }
+
   snapshot() {
     return {
       dialogue: this.dialogue ? { ...this.dialogue } : null,
       cinematic: this.cinematic ? { ...this.cinematic } : null,
       mission: this.mission ? { ...this.mission } : null,
       banner: this.banner ? { ...this.banner } : null,
+      foodBuilder: this.foodBuilder ? { ...this.foodBuilder } : null,
       controlEnabled: this.controlEnabled,
       buildAllowed: this.buildAllowed,
       storyDone: this.done,

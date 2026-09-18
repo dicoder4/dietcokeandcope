@@ -23,18 +23,34 @@ function Boot({ lines, shown }) {
 }
 
 /**
- * The wake-up. Two eyelids close in from top and bottom and then part —
- * a blink the player is on the inside of.
+ * The wake-up. Two eyelids sit fully shut, blink twice, then open the rest
+ * of the way and stay fully open — the very first thing the player sees.
+ *
+ * Split into two clean phases instead of one blended formula: a blink phase
+ * (lids mostly shut, flickering) and an opening phase (lids sweep 100% -> 0%
+ * and stay there). This guarantees the animation reads as *finished* —
+ * no residual sliver of eyelid or blur left over at progress = 1.
  */
 function EyesOpen({ progress }) {
-  // 0 -> fully shut, 1 -> fully open. Blink twice on the way.
-  const blink = Math.sin(progress * Math.PI * 3) * 0.12
-  const lid = Math.max(0, (1 - progress) * 50 + blink * 40)
+  const BLINK_END = 0.35 // first ~35% of the beat is the blink
+  let lid
+  if (progress < BLINK_END) {
+    const t = progress / BLINK_END
+    // two quick blinks: mostly shut, flickering open and closed
+    const flicker = (Math.sin(t * Math.PI * 4) + 1) / 2 // 0..1
+    lid = 88 - flicker * 18
+  } else {
+    const t = (progress - BLINK_END) / (1 - BLINK_END)
+    // ease-out sweep from shut to fully open, clamped so it never overshoots
+    const eased = 1 - Math.pow(1 - Math.min(1, t), 3)
+    lid = Math.max(0, 88 * (1 - eased))
+  }
+  const blurOpacity = Math.max(0, 1 - progress / 0.7)
   return (
     <>
       <div className="cin-lid top" style={{ height: `${lid}%` }} />
       <div className="cin-lid bottom" style={{ height: `${lid}%` }} />
-      <div className="cin-blur" style={{ opacity: Math.max(0, 1 - progress * 1.6) }} />
+      {blurOpacity > 0 && <div className="cin-blur" style={{ opacity: blurOpacity }} />}
     </>
   )
 }

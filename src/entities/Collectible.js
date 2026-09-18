@@ -8,7 +8,7 @@
  */
 
 export class Collectible {
-  constructor({ x, y, kind, typeId = null, count = 1, emoji = '', label = '', optional = false }) {
+  constructor({ x, y, kind, typeId = null, count = 1, emoji = '', label = '', optional = false, hidden = false }) {
     this.x = x
     this.y = y
     this.kind = kind // 'brick' | 'treat'
@@ -17,6 +17,13 @@ export class Collectible {
     this.emoji = emoji
     this.label = label
     this.optional = optional
+    /**
+     * Hidden items are not drawn and cannot be picked up. A level starts an
+     * item hidden when the story has not produced it yet — the shawarma does
+     * not exist on the counter until it has been built. The `reveal` beat
+     * flips this.
+     */
+    this.hidden = hidden
     this.taken = false
     this.bob = Math.random() * Math.PI * 2
   }
@@ -30,7 +37,7 @@ export class Collectible {
   }
 
   touches(player) {
-    if (this.taken || player.dead) return false
+    if (this.taken || this.hidden || player.dead) return false
     const px = player.cellX
     const fy = Math.floor(player.y)
     if (px !== this.x) return false
@@ -40,12 +47,14 @@ export class Collectible {
 
 /** The level's actual objective marker. */
 export class Goal {
-  constructor({ x, y, emoji = '⭐', label = 'GOAL', requiresGates = [] }) {
+  constructor({ x, y, emoji = '⭐', label = 'GOAL', requiresGates = [], hidden = false }) {
     this.x = x
     this.y = y
     this.emoji = emoji
     this.label = label
     this.requiresGates = requiresGates
+    /** Same contract as Collectible.hidden — invisible and untouchable. */
+    this.hidden = hidden
     this.reached = false
     this.bob = 0
   }
@@ -59,7 +68,7 @@ export class Goal {
   }
 
   touches(player) {
-    if (player.dead) return false
+    if (this.hidden || player.dead) return false
     const px = player.cellX
     const fy = Math.floor(player.y)
     if (px !== this.x) return false

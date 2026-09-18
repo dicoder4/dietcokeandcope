@@ -80,6 +80,29 @@ export const LEGO_COLLAPSE = [
   'Gravity reviewed your blueprint.',
 ]
 
+/** Anisha, watching a brick land somewhere nowhere near the gap. */
+export const LEGO_CONFUSION = [
+  'WHAT ARE YOU BUILDING 😭',
+  'That is not a bridge. That is a shed.',
+  'I don’t— what is that.',
+  'Sir. The gap is over there.',
+]
+
+/** Anisha's reaction the moment someone falls through the gap. */
+export const BRIDGE_FAIL_QUIPS = [
+  'Okay bro. Maybe architecture isn’t your thing.',
+  'Structural engineering: not your major.',
+  'That’s one way to test load-bearing capacity.',
+  'We are going to pretend that didn’t happen.',
+]
+
+/** A milestone reaction the first time the bridge looks genuinely shaky. */
+export const LEGO_WOBBLE = [
+  'I don’t think that’s structurally sound.',
+  'That’s… a choice of engineering.',
+  'Bro I can see it wobbling from here.',
+]
+
 export const IDLE_HINTS = [
   'Bricks come back. Right-click or X to pick one up again.',
   'Press Q to reclaim every brick and start the build over.',
