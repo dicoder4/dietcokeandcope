@@ -48,11 +48,12 @@ export const CAST = {
   lord: {
     id: 'lord',
     name: 'LORD',
-    skin: '#d9a273',
-    hair: '#141214',
+    skin: '#e9bd91',
+    hair: '#1e1518',
     shirt: '#3fa7e0',
     shirtAlt: '#1f6f9c',
-    pants: '#232a3a',
+    pants: '#2c3450',
+    longHair: true,
   },
   chirantan: {
     id: 'chirantan',

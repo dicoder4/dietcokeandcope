@@ -8,6 +8,7 @@ import Ending from './ui/Ending.jsx'
 import Dialogue from './ui/Dialogue.jsx'
 import FoodBuilder from './ui/FoodBuilder.jsx'
 import SongQuiz from './ui/SongQuiz.jsx'
+import Framebuffer from './ui/Framebuffer.jsx'
 /**
  * The dev panel is excluded from production builds at the MODULE level, not
  * merely hidden behind a runtime flag. `import.meta.env.DEV` written bare
@@ -290,6 +291,37 @@ export default function App() {
             const g = gameRef.current
             if (!g) return
             g.director.replaySong()
+            g.pushState()
+          }}
+        />
+      )}
+
+      {/* de-scramble the show scenes */}
+      {state?.framebuffer && !complete && (
+        <Framebuffer
+          fb={state.framebuffer}
+          onPick={(i) => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.pickCodeBlock(i)
+            g.pushState()
+          }}
+          onRetry={() => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.retryFramebuffer()
+            g.pushState()
+          }}
+          onOffset={(v) => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.setStripOffset(v)
+            g.pushState()
+          }}
+          onFps={(f) => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.pickFrameRate(f)
             g.pushState()
           }}
         />

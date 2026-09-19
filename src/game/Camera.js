@@ -58,10 +58,28 @@ export class Camera {
     this.viewH = h
   }
 
+  /**
+   * Flat mode — no shear at all.
+   *
+   * The SKEW shear is what makes the LEGO world read as 2.5D, but a metro
+   * carriage is a flat side-on scene: sheared, it leans into a rhombus. A
+   * counter-shear matrix cannot fix that (a shear slants everything drawn
+   * through it, including the coach's own square art), so interior levels
+   * switch the projection itself to flat and every routine — floor, shell,
+   * props, characters — lands in the same square space automatically.
+   *
+   * Set by Renderer.render() per frame; always restored before the frame ends.
+   */
+  static flat = false
+
+  static setFlat(on) {
+    Camera.flat = !!on
+  }
+
   /** World cell coords -> unprojected screen-space (before camera offset). */
   static project(cx, cy) {
     return {
-      x: cx * TILE_W + cy * TILE_H * SKEW,
+      x: cx * TILE_W + (Camera.flat ? 0 : cy * TILE_H * SKEW),
       y: cy * TILE_H,
     }
   }
@@ -71,7 +89,7 @@ export class Camera {
     const wx = (sx - this.viewW / 2) / this.zoom + this.x
     const wy = (sy - this.viewH / 2) / this.zoom + this.y
     const cy = wy / TILE_H
-    const cx = (wx - cy * TILE_H * SKEW) / TILE_W
+    const cx = (wx - (Camera.flat ? 0 : cy * TILE_H * SKEW)) / TILE_W
     return { cx, cy }
   }
 

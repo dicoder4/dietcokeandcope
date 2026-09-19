@@ -40,6 +40,7 @@ export class Director {
     this.banner = null // { lines, born }
     this.foodBuilder = null // { categoryIndex, categories, selections, reaction, done, ... }
     this.songQuiz = null // { rounds, roundIndex, phase, picked, wasCorrect, score, reaction }
+    this.framebuffer = null // { kind, puzzle, phase, offset, aligned, fps, reaction, ... }
     this.skipCutscenes = false // headless simulation flag
     /**
      * Index of the last beat marked `checkpoint: true`. Dying rewinds the
@@ -65,6 +66,7 @@ export class Director {
     this.banner = null
     this.foodBuilder = null
     this.songQuiz = null
+    this.framebuffer = null
     this.checkpointIndex = -1
     if (this.skipCutscenes) {
       // Headless mode: no story, just let the level be playable immediately.
@@ -117,6 +119,7 @@ export class Director {
     this.banner = null
     this.foodBuilder = null
     this.songQuiz = null
+    this.framebuffer = null
     this.index = this.checkpointIndex - 1 // advance() pre-increments
     this.advance()
     return true
@@ -206,6 +209,40 @@ export class Director {
     this.game.dirty = true
   }
 
+  // ---- framebuffer progression -------------------------------------------
+  // Third instance of the same contract: the UI reports, the beat decides.
+  // Each of these is a single write into `state` that the `framebuffer` beat
+  // picks up on its next update().
+
+  /** Drop a code block into the empty slot (index into the puzzle's blocks). */
+  pickCodeBlock(index) {
+    if (this.framebuffer?.phase !== 'picking') return
+    this.state.fbPick = index
+    this.game.dirty = true
+  }
+
+  /** Recompile after a failed build. */
+  retryFramebuffer() {
+    if (this.framebuffer?.phase !== 'failed') return
+    this.state.fbRetry = true
+    this.game.dirty = true
+  }
+
+  /** Move the SHIFT_OFFSET slider. Fires continuously while dragging. */
+  setStripOffset(value) {
+    const fb = this.framebuffer
+    if (!fb || (fb.phase !== 'aligning' && fb.phase !== 'fps')) return
+    this.state.fbOffset = value
+    this.game.dirty = true
+  }
+
+  /** Choose a frame rate. Only unlocked once the strips are aligned. */
+  pickFrameRate(fps) {
+    if (this.framebuffer?.phase !== 'fps') return
+    this.state.fbFps = fps
+    this.game.dirty = true
+  }
+
   // ---- dev tools ---------------------------------------------------------
 
   /**
@@ -246,6 +283,7 @@ export class Director {
       banner: this.banner ? { ...this.banner } : null,
       foodBuilder: this.foodBuilder ? { ...this.foodBuilder } : null,
       songQuiz: this.songQuiz ? { ...this.songQuiz } : null,
+      framebuffer: this.framebuffer ? { ...this.framebuffer } : null,
       controlEnabled: this.controlEnabled,
       buildAllowed: this.buildAllowed,
       storyDone: this.done,

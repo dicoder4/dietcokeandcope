@@ -32,10 +32,11 @@
 
 import level1 from '../src/levels/level1.js'
 import level2 from '../src/levels/level2.js'
+import level3 from '../src/levels/level3.js'
 import { BLOCK_TYPES, footprint } from '../src/entities/Block.js'
 import { CAST } from '../src/config/gameConfig.js'
 
-const LEVELS = [level1, level2]
+const LEVELS = [level1, level2, level3]
 
 const SOLID = new Set(['#', '=', '|', '_', 'B'])
 const FATAL_FALL = 6
@@ -198,6 +199,60 @@ function checkStoryScript(def) {
         else if (!r.choices.some((c) => c.id === r.correct)) {
           fail('song round "' + r.id + '" has correct id "' + r.correct + '" not among its choices')
         }
+      }
+    }
+    /**
+     * A framebuffer puzzle with no winning move strands the player forever —
+     * the beat never returns true and the script stops dead. Both failure
+     * modes below (no correct block, an unreachable frame rate) are silent
+     * until someone plays all the way to that puzzle, so they get checked.
+     */
+    if (b.t === 'framebuffer') {
+      const p = b.puzzle
+      if (!p) {
+        fail('framebuffer beat has no puzzle')
+      } else if (p.kind === 'scranton') {
+        const blocks = p.blocks ?? []
+        if (!blocks.length) fail('framebuffer "' + p.id + '" has no code blocks')
+        const right = blocks.filter((x) => x.correct)
+        if (right.length !== 1) {
+          fail(
+            'framebuffer "' + p.id + '" has ' + right.length + ' correct blocks — it needs exactly 1'
+          )
+        }
+        if (p.blankIndex == null || !p.snippet?.[p.blankIndex]) {
+          fail('framebuffer "' + p.id + '" blankIndex does not point at a snippet line')
+        }
+        const tiles = p.tiles?.length ?? 0
+        if (!tiles || p.scrambled?.length !== tiles) {
+          fail('framebuffer "' + p.id + '" scrambled order does not cover all ' + tiles + ' tiles')
+        } else if (new Set(p.scrambled).size !== tiles) {
+          fail('framebuffer "' + p.id + '" scrambled order repeats or drops a tile')
+        }
+      } else if (p.kind === 'dunphy') {
+        const opts = p.fpsOptions ?? []
+        if (!opts.length) fail('framebuffer "' + p.id + '" has no frame-rate options')
+        else if (!opts.includes(p.correctFps)) {
+          fail(
+            'framebuffer "' + p.id + '" correctFps ' + p.correctFps + ' is not among its fpsOptions'
+          )
+        }
+        if (!p.strips?.length) fail('framebuffer "' + p.id + '" has no strips')
+        else if (p.strips.some((s) => !s.shear)) {
+          fail('framebuffer "' + p.id + '" has a strip with no shear — it can never look torn')
+        }
+        // the target must be somewhere the slider can actually reach
+        const lo = p.sliderMin ?? -100
+        const hi = p.sliderMax ?? 100
+        const target = p.targetOffset ?? 0
+        if (target < lo || target > hi) {
+          fail('framebuffer "' + p.id + '" targetOffset ' + target + ' is outside the slider range')
+        }
+        if (p.startOffset != null && Math.abs(p.startOffset - target) <= (p.tolerance ?? 6)) {
+          fail('framebuffer "' + p.id + '" starts already aligned — there is nothing to solve')
+        }
+      } else {
+        fail('framebuffer beat has unknown puzzle kind "' + p.kind + '"')
       }
     }
   }

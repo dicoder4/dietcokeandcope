@@ -96,6 +96,10 @@ export class World {
     this.player.accessory = def.playerAccessory ?? null
     this.musicMode = false
     this.musicStart = 0
+    // Level 3's equivalent flag: once the rig boots, the RGB comes up and
+    // the monitors switch to the restored sitcom scenes. See Renderer.
+    this.rigOnline = false
+    this.rigStart = 0
     this.building.loadInventory(def.inventory ?? {})
 
     const wp = Camera.project(this.player.x, this.player.y)
@@ -122,6 +126,9 @@ export class World {
     // his shirt — that would replay the punchline he has already had.
     const savedAccessory = this.player?.accessory
     const savedMusicMode = this.musicMode
+    // Same reasoning for the rig: once it has booted, dying must not
+    // un-build it and turn the room's lights back off.
+    const savedRig = this.rigOnline
 
     this.build(this.def)
     // keep the completion latch, or restoring reached goals below would
@@ -129,6 +136,7 @@ export class World {
     this.complete = wasComplete ?? false
     if (savedAccessory !== undefined) this.player.accessory = savedAccessory
     this.musicMode = savedMusicMode ?? false
+    this.rigOnline = savedRig ?? false
 
     if (savedNpcs) {
       for (const s of savedNpcs) {

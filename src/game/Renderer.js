@@ -203,65 +203,69 @@ function drawThinPlate(ctx, x, y, pal) {
  * A continuous floor slab — the interior alternative to studded bricks.
  *
  * Level 1's ground IS LEGO, so drawing it brick-by-brick with studs is
- * correct there. A metro carriage is not built out of LEGO, so an interior
- * level draws its deck as one unbroken vinyl surface instead: a single top
- * face per horizontal run, no studs, no per-cell seams, and a scuffed
- * gradient so it still reads as dimensional under the same lighting.
+ * correct there. A metro carriage is neither made of LEGO nor tilted, so an
+ * interior deck is one unbroken vinyl slab per horizontal run, with vertical
+ * sides and no studs. (The tilt itself is removed once for the whole scene —
+ * see the `interior` un-shear in render().)
  *
  * `run` is the number of cells this slab spans horizontally, which lets the
  * caller coalesce a whole row into one path and keep the surface seamless.
+ *
+ * `opts.line` is the painted stripe along the deck — '#d8b53f' is the metro's
+ * safety line. Pass null for a surface that has no such marking (the gym's
+ * rubber matting), which is the only thing that differs between the two.
  */
 function drawFloorSlab(ctx, x, y, run, pal, opts = {}) {
-  const { top = true } = opts
-  const p = Camera.project(x, y)
+  const line = opts.line === undefined ? '#d8b53f' : opts.line
+  // Axis-aligned, like the carriage shell: the unsheared cell origin, so the
+  // deck stays square under render()'s interior un-shear.
+  const px = x * TILE_W
+  const py = y * TILE_H
   const w = run * TILE_W
-  const sk = TILE_H * SKEW
 
   ctx.save()
 
-  // ---- front face: the riser you see below the walking surface ----
-  ctx.beginPath()
-  ctx.moveTo(p.x, p.y)
-  ctx.lineTo(p.x + w, p.y)
-  ctx.lineTo(p.x + w + sk, p.y + TILE_H)
-  ctx.lineTo(p.x + sk, p.y + TILE_H)
-  ctx.closePath()
-  const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + TILE_H)
-  grad.addColorStop(0, pal.color)
-  grad.addColorStop(1, shade(pal.color, -14))
-  ctx.fillStyle = grad
-  ctx.fill()
+  // The deck the passengers stand on. Seen from the side this is a shallow
+  // band, not a tall block — a metro floor has no visible underframe from
+  // inside the coach.
+  const deckH = TILE_H * 0.55
 
-  // ---- top face: the vinyl the passengers actually stand on ----
-  if (top) {
+  // ---- the floor surface ----
+  const surf = ctx.createLinearGradient(px, py, px, py + deckH)
+  surf.addColorStop(0, pal.colorTop)
+  surf.addColorStop(1, shade(pal.colorTop, -24))
+  ctx.fillStyle = surf
+  ctx.fillRect(px, py, w, deckH)
+
+  // ---- the yellow safety line that runs the length of every metro coach ---
+  if (line) {
+    ctx.fillStyle = line
+    ctx.fillRect(px, py + deckH * 0.34, w, 3)
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fillRect(px, py + deckH * 0.34, w, 1)
+  }
+
+  // ---- anti-slip grooves, evenly spaced down the coach ----
+  ctx.strokeStyle = 'rgba(0,0,0,0.13)'
+  ctx.lineWidth = 1
+  for (const t of [0.62, 0.78, 0.92]) {
+    const gy = Math.round(py + deckH * t) + 0.5
     ctx.beginPath()
-    ctx.moveTo(p.x, p.y)
-    ctx.lineTo(p.x + w, p.y)
-    ctx.lineTo(p.x + w + DEPTH * 0.9, p.y - DEPTH)
-    ctx.lineTo(p.x + DEPTH * 0.9, p.y - DEPTH)
-    ctx.closePath()
-    ctx.fillStyle = pal.colorTop
-    ctx.fill()
-
-    // a long anti-slip groove running the length of the carriage, which is
-    // what sells "train floor" rather than "grey rectangle"
-    ctx.strokeStyle = 'rgba(0,0,0,0.13)'
-    ctx.lineWidth = 1
-    for (const t of [0.34, 0.66]) {
-      ctx.beginPath()
-      ctx.moveTo(p.x + DEPTH * 0.9 * t, p.y - DEPTH * t)
-      ctx.lineTo(p.x + w + DEPTH * 0.9 * t, p.y - DEPTH * t)
-      ctx.stroke()
-    }
-
-    // the nose-edge highlight where the floor meets the drop
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)'
-    ctx.lineWidth = 1.4
-    ctx.beginPath()
-    ctx.moveTo(p.x, p.y)
-    ctx.lineTo(p.x + w, p.y)
+    ctx.moveTo(px, gy)
+    ctx.lineTo(px + w, gy)
     ctx.stroke()
   }
+
+  // ---- the bright nose edge where the floor catches the ceiling light ----
+  ctx.fillStyle = 'rgba(255,255,255,0.22)'
+  ctx.fillRect(px, py, w, 2)
+
+  // ---- dark shadow under the seats, along the back of the deck ----
+  const shad = ctx.createLinearGradient(px, py, px, py + deckH * 0.3)
+  shad.addColorStop(0, 'rgba(0,0,0,0.3)')
+  shad.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = shad
+  ctx.fillRect(px, py, w, deckH * 0.3)
 
   ctx.restore()
 }
@@ -361,7 +365,7 @@ function drawHazard(ctx, h, now) {
  * playable and collide with nothing, so a level can be dressed without
  * touching its geometry.
  */
-function drawProp(ctx, prop, now) {
+function drawProp(ctx, prop, now, rig = false) {
   const { type, x, y } = prop
   const p = Camera.project(x, y)
   const baseX = p.x + TILE_W * 0.5 + TILE_H * SKEW
@@ -645,6 +649,349 @@ function drawProp(ctx, prop, now) {
       break
     }
 
+    // ------------------------------------------------------------------
+    //  LEVEL 3 — the gym half
+    //
+    //  Deliberately a bit too much of everything: the joke is that someone
+    //  put a full gym and a full PC lab in the same room. These are props,
+    //  so none of them collide — the player walks straight past the bench
+    //  press, which is exactly the point of the level.
+    // ------------------------------------------------------------------
+
+    case 'dumbbellRack': {
+      const rw = TILE_W * 2.6
+      const rx = baseX - rw / 2
+      // the angled rack frame
+      ctx.fillStyle = '#39404f'
+      ctx.beginPath()
+      ctx.roundRect(rx, baseY - TILE_H * 1.15, rw, TILE_H * 1.15, 4)
+      ctx.fill()
+      ctx.fillStyle = '#2a303c'
+      ctx.fillRect(rx, baseY - TILE_H * 0.62, rw, 5)
+      // two shelves of dumbbells, big ones at the bottom
+      for (const [row, r, gap] of [
+        [0.78, 7, 17],
+        [0.3, 5, 13],
+      ]) {
+        const dy = baseY - TILE_H * row
+        for (let i = 0; i < 4; i++) {
+          const dx = rx + 10 + i * gap
+          ctx.fillStyle = '#12161d'
+          ctx.beginPath()
+          ctx.arc(dx, dy, r, 0, Math.PI * 2)
+          ctx.arc(dx + r * 1.5, dy, r, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.fillStyle = '#5a6475'
+          ctx.fillRect(dx, dy - 2, r * 1.5, 4)
+        }
+      }
+      break
+    }
+
+    case 'barbell': {
+      // Leaning against the wall, because nobody re-racks.
+      const bh = TILE_H * 2.8
+      ctx.save()
+      ctx.translate(baseX, baseY)
+      ctx.rotate(-0.22)
+      ctx.fillStyle = '#aab4c2'
+      ctx.fillRect(-3, -bh, 6, bh)
+      // the plates
+      for (const [py, r] of [
+        [-bh + 16, 15],
+        [-16, 15],
+      ]) {
+        ctx.fillStyle = '#1a1f28'
+        ctx.beginPath()
+        ctx.ellipse(0, py, 7, r, 0, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#e2453c'
+        ctx.beginPath()
+        ctx.ellipse(0, py, 3.5, r * 0.5, 0, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.restore()
+      break
+    }
+
+    case 'benchPress': {
+      const bw = TILE_W * 3.4
+      const bx = baseX - bw / 2
+      const padY = baseY - TILE_H * 0.95
+      // uprights
+      ctx.fillStyle = '#4a5364'
+      ctx.fillRect(bx + 6, baseY - TILE_H * 2.3, 7, TILE_H * 2.3)
+      ctx.fillRect(bx + bw - 13, baseY - TILE_H * 2.3, 7, TILE_H * 2.3)
+      // the bar resting in the hooks
+      ctx.fillStyle = '#c3ccd6'
+      ctx.fillRect(bx - 6, baseY - TILE_H * 2.22, bw + 12, 5)
+      ctx.fillStyle = '#1a1f28'
+      ctx.beginPath()
+      ctx.ellipse(bx - 4, baseY - TILE_H * 2.2, 5, 13, 0, 0, Math.PI * 2)
+      ctx.ellipse(bx + bw + 4, baseY - TILE_H * 2.2, 5, 13, 0, 0, Math.PI * 2)
+      ctx.fill()
+      // the red vinyl pad
+      ctx.fillStyle = '#b8352c'
+      ctx.beginPath()
+      ctx.roundRect(bx + 14, padY, bw - 28, 13, 5)
+      ctx.fill()
+      ctx.fillStyle = 'rgba(255,255,255,0.14)'
+      ctx.fillRect(bx + 14, padY + 2, bw - 28, 3)
+      // legs
+      ctx.fillStyle = '#39404f'
+      ctx.fillRect(bx + 20, padY + 13, 6, TILE_H * 0.95 - 13)
+      ctx.fillRect(bx + bw - 26, padY + 13, 6, TILE_H * 0.95 - 13)
+      break
+    }
+
+    case 'proteinBottle': {
+      // A shaker and a tub of something with far too many scoops in it.
+      const sh = TILE_H * 0.85
+      ctx.fillStyle = '#2b3242'
+      ctx.beginPath()
+      ctx.roundRect(baseX - 8, baseY - sh, 16, sh, 3)
+      ctx.fill()
+      ctx.fillStyle = prop.color ?? '#7ee08a'
+      ctx.beginPath()
+      ctx.roundRect(baseX - 8, baseY - sh * 0.62, 16, sh * 0.62, 3)
+      ctx.fill()
+      // the lid
+      ctx.fillStyle = '#e2453c'
+      ctx.beginPath()
+      ctx.roundRect(baseX - 9, baseY - sh - 6, 18, 7, 2)
+      ctx.fill()
+      break
+    }
+
+    case 'gymMirror': {
+      // A free-standing mirror on the floor, separate from the wall one in
+      // the shell — it catches the RGB and doubles the clutter.
+      const mw = TILE_W * 1.6
+      const mh = TILE_H * 2.6
+      ctx.fillStyle = '#39404f'
+      ctx.fillRect(baseX - mw / 2 - 3, baseY - mh - 3, mw + 6, mh + 6)
+      const gl = ctx.createLinearGradient(baseX - mw / 2, baseY - mh, baseX + mw / 2, baseY)
+      gl.addColorStop(0, 'rgba(170,200,225,0.4)')
+      gl.addColorStop(1, 'rgba(110,140,170,0.3)')
+      ctx.fillStyle = gl
+      ctx.fillRect(baseX - mw / 2, baseY - mh, mw, mh)
+      break
+    }
+
+    // ------------------------------------------------------------------
+    //  LEVEL 3 — the PC lab half
+    // ------------------------------------------------------------------
+
+    case 'pcCase': {
+      const cw = TILE_W * 1.5
+      const ch = TILE_H * 2.6
+      const cx = baseX - cw / 2
+      const cy = baseY - ch
+      // the chassis
+      ctx.fillStyle = '#171b24'
+      ctx.beginPath()
+      ctx.roundRect(cx, cy, cw, ch, 4)
+      ctx.fill()
+      // tempered glass side panel, lit from inside once the rig is up
+      const hue = rig ? (now * 70) % 360 : 210
+      const glass = ctx.createLinearGradient(cx, cy, cx, baseY)
+      glass.addColorStop(0, `hsla(${hue}, 85%, 60%, ${rig ? 0.5 : 0.12})`)
+      glass.addColorStop(1, `hsla(${(hue + 60) % 360}, 85%, 55%, ${rig ? 0.35 : 0.08})`)
+      ctx.fillStyle = glass
+      ctx.fillRect(cx + 4, cy + 5, cw - 8, ch - 10)
+      // three case fans, spinning only when powered
+      const spin = rig ? now * 7 : 0
+      for (let i = 0; i < 3; i++) {
+        const fy = cy + 16 + i * (ch - 30) / 2.4
+        const fx = cx + cw * 0.34
+        ctx.save()
+        ctx.translate(fx, fy)
+        ctx.strokeStyle = rig ? `hsla(${(hue + i * 40) % 360}, 90%, 70%, 0.9)` : '#39404f'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.arc(0, 0, 7, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.rotate(spin + i)
+        for (let b = 0; b < 3; b++) {
+          ctx.rotate((Math.PI * 2) / 3)
+          ctx.beginPath()
+          ctx.moveTo(0, 0)
+          ctx.lineTo(6, 2)
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+      // front power LED
+      ctx.fillStyle = rig ? '#7ef0a0' : '#3a4150'
+      ctx.beginPath()
+      ctx.arc(cx + cw - 7, cy + 9, 2.6, 0, Math.PI * 2)
+      ctx.fill()
+      break
+    }
+
+    case 'monitorDesk': {
+      // The desk with however many monitors the level asks for. Before the
+      // rig boots they show scrolling code; after, the restored sitcom
+      // scenes, which is the visible payoff of the whole level.
+      const count = prop.screens ?? 2
+      const dw = TILE_W * (1.9 + count * 0.9)
+      const dx = baseX - dw / 2
+      const deskY = baseY - TILE_H * 1.05
+
+      // desk surface + legs
+      ctx.fillStyle = '#3a2f26'
+      ctx.beginPath()
+      ctx.roundRect(dx, deskY, dw, 9, 2)
+      ctx.fill()
+      ctx.fillStyle = '#242a35'
+      ctx.fillRect(dx + 8, deskY + 9, 6, TILE_H * 1.05 - 9)
+      ctx.fillRect(dx + dw - 14, deskY + 9, 6, TILE_H * 1.05 - 9)
+
+      // the monitors
+      const mw = TILE_W * 1.5
+      const mh = TILE_H * 1.15
+      for (let i = 0; i < count; i++) {
+        const mx = dx + 14 + i * (mw + 9)
+        const my = deskY - mh - 8
+        // stand
+        ctx.fillStyle = '#1b1f28'
+        ctx.fillRect(mx + mw / 2 - 4, my + mh, 8, 8)
+        ctx.fillRect(mx + mw / 2 - 12, deskY - 2, 24, 3)
+        // bezel
+        ctx.fillStyle = '#0d1016'
+        ctx.beginPath()
+        ctx.roundRect(mx, my, mw, mh, 3)
+        ctx.fill()
+        // the screen
+        const sx = mx + 3
+        const sy = my + 3
+        const sw = mw - 6
+        const sh = mh - 6
+        if (rig) {
+          // ultra-HD sitcom: a warm office on one, a blue living room on
+          // the next, with a little figure in each
+          const warm = i % 2 === 0
+          ctx.fillStyle = warm ? '#6b5a3a' : '#3c4a6b'
+          ctx.fillRect(sx, sy, sw, sh)
+          ctx.font = `${Math.round(sh * 0.55)}px system-ui, "Segoe UI Emoji", sans-serif`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(warm ? '🙂' : '🙃', sx + sw / 2, sy + sh / 2)
+          // scanline sheen
+          ctx.fillStyle = 'rgba(255,255,255,0.08)'
+          ctx.fillRect(sx, sy, sw, sh * 0.3)
+        } else {
+          // scrolling code: green lines creeping up the panel
+          ctx.fillStyle = '#0a1410'
+          ctx.fillRect(sx, sy, sw, sh)
+          ctx.fillStyle = 'rgba(126,240,160,0.75)'
+          const rows = 7
+          for (let r = 0; r < rows; r++) {
+            const t = (now * 12 + r * 9 + i * 5) % (rows * 9)
+            const ly = sy + sh - (t % sh)
+            const lw = ((r * 37 + i * 13) % 100) / 100
+            ctx.fillRect(sx + 3, ly, (sw - 6) * (0.3 + lw * 0.6), 1.6)
+          }
+        }
+      }
+
+      // keyboard + mouse on the desk
+      ctx.fillStyle = rig ? `hsla(${(now * 70) % 360}, 80%, 60%, 0.9)` : '#39404f'
+      ctx.beginPath()
+      ctx.roundRect(dx + dw * 0.3, deskY - 5, TILE_W * 1.5, 5, 2)
+      ctx.fill()
+      ctx.fillStyle = '#4a5364'
+      ctx.beginPath()
+      ctx.ellipse(dx + dw * 0.3 + TILE_W * 1.7, deskY - 3, 5, 3.4, 0, 0, Math.PI * 2)
+      ctx.fill()
+      break
+    }
+
+    case 'gpuShelf': {
+      // A shelf of loose components, treated like trophies.
+      const sw = TILE_W * 2.4
+      const sx = baseX - sw / 2
+      const sy = baseY - TILE_H * 1.5
+      ctx.fillStyle = '#2f3644'
+      ctx.beginPath()
+      ctx.roundRect(sx, sy, sw, 6, 2)
+      ctx.fill()
+      // the GPU: a long black slab with a fan and a lit edge
+      ctx.fillStyle = '#12161d'
+      ctx.beginPath()
+      ctx.roundRect(sx + 6, sy - 15, sw - 12, 15, 2)
+      ctx.fill()
+      const hue = rig ? (now * 70) % 360 : 200
+      ctx.fillStyle = `hsla(${hue}, 85%, 62%, ${rig ? 0.95 : 0.4})`
+      ctx.fillRect(sx + 6, sy - 15, sw - 12, 2)
+      ctx.strokeStyle = '#5a6475'
+      ctx.lineWidth = 1.5
+      for (const fx of [sx + sw * 0.32, sx + sw * 0.66]) {
+        ctx.beginPath()
+        ctx.arc(fx, sy - 7.5, 5, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      break
+    }
+
+    case 'ramStick': {
+      // RAM standing on end like a little monolith, heatspreader and all.
+      const rh = TILE_H * 0.8
+      ctx.fillStyle = '#1b2029'
+      ctx.beginPath()
+      ctx.roundRect(baseX - 5, baseY - rh, 10, rh, 2)
+      ctx.fill()
+      ctx.fillStyle = prop.color ?? '#b07be0'
+      ctx.fillRect(baseX - 5, baseY - rh, 10, 4)
+      // gold contacts
+      ctx.fillStyle = '#d4a53f'
+      ctx.fillRect(baseX - 5, baseY - 3, 10, 3)
+      break
+    }
+
+    case 'coolingFan': {
+      // A spare 120mm fan, propped up and spinning when the rig is on.
+      const r = 13
+      const cy2 = baseY - r - 3
+      ctx.fillStyle = '#1b2029'
+      ctx.beginPath()
+      ctx.roundRect(baseX - r - 2, cy2 - r - 2, (r + 2) * 2, (r + 2) * 2, 3)
+      ctx.fill()
+      ctx.save()
+      ctx.translate(baseX, cy2)
+      ctx.rotate(rig ? now * 9 : now * 0.3)
+      ctx.fillStyle = rig ? `hsla(${(now * 70) % 360}, 85%, 65%, 0.85)` : '#4a5364'
+      for (let b = 0; b < 7; b++) {
+        ctx.rotate((Math.PI * 2) / 7)
+        ctx.beginPath()
+        ctx.ellipse(r * 0.5, 0, r * 0.45, 3.4, 0.5, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.restore()
+      ctx.fillStyle = '#2f3644'
+      ctx.beginPath()
+      ctx.arc(baseX, cy2, 4, 0, Math.PI * 2)
+      ctx.fill()
+      break
+    }
+
+    case 'rgbStrip': {
+      // A floor-standing RGB bar. Pure vibe, zero function.
+      const sh = TILE_H * 2.2
+      const hue = rig ? (now * 70 + x * 25) % 360 : (200 + x * 6) % 360
+      ctx.fillStyle = '#1b2029'
+      ctx.fillRect(baseX - 4, baseY - sh, 8, sh)
+      ctx.fillStyle = `hsla(${hue}, 90%, 62%, ${rig ? 0.95 : 0.45})`
+      ctx.fillRect(baseX - 2.5, baseY - sh + 4, 5, sh - 8)
+      // the glow it throws onto the floor
+      const glow = ctx.createRadialGradient(baseX, baseY - sh / 2, 2, baseX, baseY - sh / 2, 46)
+      glow.addColorStop(0, `hsla(${hue}, 90%, 62%, ${rig ? 0.3 : 0.12})`)
+      glow.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = glow
+      ctx.fillRect(baseX - 46, baseY - sh - 20, 92, sh + 40)
+      break
+    }
+
     default:
       break
   }
@@ -656,10 +1003,32 @@ function drawProp(ctx, prop, now) {
  * across the top of the screen, which starts pulsing in time once the
  * earphones go in.
  */
-function drawCeilingStrip(ctx, w, h, now, music) {
+function drawCeilingStrip(ctx, w, h, now, music, shell = 'metro', rig = false) {
   ctx.save()
-  const pulse = music ? 0.62 + Math.sin(now * 6.5) * 0.28 : 0.4
   const stripH = h * 0.1
+
+  if (shell === 'gym') {
+    // The lab's RGB. Idle it is a calm cyan; once the rig boots it cycles
+    // hue, which is the cheapest possible way to make the whole room react
+    // to the build finishing.
+    const hue = rig ? (now * 70) % 360 : 190
+    const pulse = rig ? 0.6 + Math.sin(now * 4) * 0.22 : 0.34
+    const g = ctx.createLinearGradient(0, 0, 0, stripH * 2.4)
+    g.addColorStop(0, `hsla(${hue}, 85%, 62%, ${pulse})`)
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, stripH * 2.4)
+
+    // two parallel housings — it reads as a lab, not a single train tube
+    ctx.fillStyle = `hsla(${hue}, 90%, 72%, ${rig ? 0.9 : 0.55})`
+    ctx.fillRect(0, stripH * 0.3, w, 5)
+    ctx.fillStyle = `hsla(${(hue + 140) % 360}, 90%, 70%, ${rig ? 0.75 : 0.35})`
+    ctx.fillRect(0, stripH * 0.72, w, 3)
+    ctx.restore()
+    return
+  }
+
+  const pulse = music ? 0.62 + Math.sin(now * 6.5) * 0.28 : 0.4
   const g = ctx.createLinearGradient(0, 0, 0, stripH * 2.4)
   g.addColorStop(0, music ? `rgba(255,190,240,${pulse})` : `rgba(210,228,245,${pulse})`)
   g.addColorStop(1, 'rgba(255,255,255,0)')
@@ -669,6 +1038,296 @@ function drawCeilingStrip(ctx, w, h, now, music) {
   // the housing itself
   ctx.fillStyle = music ? 'rgba(255,220,250,0.85)' : 'rgba(228,238,248,0.8)'
   ctx.fillRect(0, stripH * 0.35, w, 6)
+  ctx.restore()
+}
+
+/**
+ * THE GYM SHELL — the thing that makes Level 3 read as "a gym that someone
+ * has filled with computers" rather than "furniture in a grey room".
+ *
+ * Same contract as drawCarriageShell: world space, behind every prop, built
+ * from axis-aligned rects off the UNSHEARED cell origin (render() has
+ * cancelled the projection's shear for interior levels). Three zones across
+ * the room, left to right, matching where the level puts its props:
+ *
+ *   x < 17    the gym half: mirrored wall, wall bars, a motivational poster
+ *   x >= 17   the lab half: pegboard, cable trays, RGB wash
+ *
+ * `rig` is world.rigOnline — once the PC boots, the whole room lights up.
+ */
+function drawGymShell(ctx, x0, x1, deckY, now, rig) {
+  const left = { x: x0 * TILE_W, y: deckY * TILE_H }
+  const right = { x: x1 * TILE_W, y: deckY * TILE_H }
+  const wallW = right.x - left.x
+  const split = left.x + wallW * 0.5 // gym | lab
+
+  const roofY = left.y - TILE_H * 5.6
+  const wainscotY = left.y - TILE_H * 1.6
+
+  ctx.save()
+
+  // ---- the back wall ----
+  const wall = ctx.createLinearGradient(0, roofY, 0, left.y)
+  wall.addColorStop(0, rig ? '#241d38' : '#20242e')
+  wall.addColorStop(1, rig ? '#171327' : '#171a22')
+  ctx.fillStyle = wall
+  ctx.fillRect(left.x, roofY, wallW, left.y - roofY)
+
+  // ---- GYM HALF: the mirror ----
+  const mirrorX = left.x + TILE_W * 1.2
+  const mirrorW = split - mirrorX - TILE_W * 0.6
+  const mirrorY = roofY + TILE_H * 1.1
+  const mirrorH = wainscotY - mirrorY
+  const glass = ctx.createLinearGradient(mirrorX, mirrorY, mirrorX + mirrorW, wainscotY)
+  glass.addColorStop(0, 'rgba(150,180,205,0.30)')
+  glass.addColorStop(0.5, 'rgba(190,215,235,0.16)')
+  glass.addColorStop(1, 'rgba(120,150,180,0.26)')
+  ctx.fillStyle = glass
+  ctx.fillRect(mirrorX, mirrorY, mirrorW, mirrorH)
+  // a diagonal sheen so it reads as glass rather than a grey panel
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(mirrorX, mirrorY, mirrorW, mirrorH)
+  ctx.clip()
+  ctx.fillStyle = 'rgba(255,255,255,0.10)'
+  ctx.beginPath()
+  ctx.moveTo(mirrorX + mirrorW * 0.12, mirrorY)
+  ctx.lineTo(mirrorX + mirrorW * 0.3, mirrorY)
+  ctx.lineTo(mirrorX + mirrorW * 0.1, mirrorY + mirrorH)
+  ctx.lineTo(mirrorX - mirrorW * 0.08, mirrorY + mirrorH)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+  // frame
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)'
+  ctx.lineWidth = 2
+  ctx.strokeRect(mirrorX, mirrorY, mirrorW, mirrorH)
+
+  // ---- LAB HALF: pegboard ----
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(split, roofY + TILE_H * 0.9, right.x - split, wainscotY - roofY - TILE_H * 0.9)
+  ctx.clip()
+  ctx.fillStyle = rig ? '#2b2242' : '#1c2030'
+  ctx.fillRect(split, roofY + TILE_H * 0.9, right.x - split, wainscotY - roofY)
+  ctx.fillStyle = 'rgba(0,0,0,0.30)'
+  for (let px = split + 9; px < right.x; px += 16) {
+    for (let py = roofY + TILE_H * 1.3; py < wainscotY; py += 16) {
+      ctx.beginPath()
+      ctx.arc(px, py, 1.6, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  ctx.restore()
+
+  // ---- the RGB strip washing the wall, brighter once the rig is up ----
+  const hue = rig ? (now * 70) % 360 : 190
+  const wash = ctx.createLinearGradient(0, wainscotY - TILE_H * 2.4, 0, wainscotY)
+  wash.addColorStop(0, `hsla(${hue}, 90%, 60%, 0)`)
+  wash.addColorStop(1, `hsla(${hue}, 90%, 60%, ${rig ? 0.3 : 0.12})`)
+  ctx.fillStyle = wash
+  ctx.fillRect(left.x, wainscotY - TILE_H * 2.4, wallW, TILE_H * 2.4)
+
+  // the strip itself, tucked under the shelf line
+  ctx.fillStyle = `hsla(${hue}, 95%, 68%, ${rig ? 0.95 : 0.5})`
+  ctx.fillRect(left.x, wainscotY - 3, wallW, 3)
+
+  // ---- rubber wainscot, the band the equipment sits against ----
+  const skirt = ctx.createLinearGradient(0, wainscotY, 0, left.y)
+  skirt.addColorStop(0, '#2b3040')
+  skirt.addColorStop(1, '#171a24')
+  ctx.fillStyle = skirt
+  ctx.fillRect(left.x, wainscotY, wallW, left.y - wainscotY)
+
+  // vertical joints in the rubber
+  ctx.strokeStyle = 'rgba(0,0,0,0.22)'
+  ctx.lineWidth = 1
+  for (let px = left.x; px < right.x; px += TILE_W * 2) {
+    ctx.beginPath()
+    ctx.moveTo(px, wainscotY)
+    ctx.lineTo(px, left.y)
+    ctx.stroke()
+  }
+
+  // ---- ceiling ribs ----
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'
+  ctx.fillRect(left.x, roofY, wallW, TILE_H * 0.5)
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+  for (let px = left.x; px < right.x; px += TILE_W * 3) {
+    ctx.beginPath()
+    ctx.moveTo(px, roofY)
+    ctx.lineTo(px, roofY + TILE_H * 0.5)
+    ctx.stroke()
+  }
+
+  ctx.restore()
+}
+
+/**
+ * THE CARRIAGE SHELL — the thing that makes Level 2 read as "inside a train"
+ * rather than "furniture in a grey room".
+ *
+ * Drawn in WORLD space, behind every prop, so it scrolls and rocks with the
+ * scene. Three bands stacked up the wall, matching a real Namma Metro coach:
+ *
+ *   roof      curved ceiling ribs + the lit strip housing
+ *   upper     the window band — a long continuous glazed run
+ *   lower     the panelled wall the seats are bolted to, plus the skirting
+ *
+ * `deckY` is the floor row the carriage sits on; everything is measured up
+ * from there so the shell always meets the floor exactly.
+ */
+function drawCarriageShell(ctx, x0, x1, deckY, now, music) {
+  /**
+   * This routine is built entirely from axis-aligned rects, so its origin
+   * must be the UNSHEARED cell position. render() has already cancelled the
+   * projection's shear for interior levels; feeding a raw Camera.project()
+   * origin in here would re-introduce it on one axis only and slant every
+   * wall — which is exactly how the coach turned into a rhombus.
+   */
+  const left = { x: x0 * TILE_W, y: deckY * TILE_H }
+  const right = { x: x1 * TILE_W, y: deckY * TILE_H }
+  const wallW = right.x - left.x
+
+  const roofY = left.y - TILE_H * 5.6
+  const windowTop = left.y - TILE_H * 4.2
+  const windowBot = left.y - TILE_H * 2.0
+  const skirtY = left.y - TILE_H * 0.35
+
+  ctx.save()
+
+  // ---- lower wall: the panelling the seats mount onto ----
+  const lower = ctx.createLinearGradient(0, windowBot, 0, left.y)
+  lower.addColorStop(0, music ? '#5d5470' : '#59616f')
+  lower.addColorStop(1, music ? '#3b3450' : '#3a404c')
+  ctx.fillStyle = lower
+  ctx.fillRect(left.x, windowBot, wallW, left.y - windowBot)
+
+  // vertical panel joints, evenly spaced down the coach
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)'
+  ctx.lineWidth = 1
+  for (let px = left.x; px < right.x; px += TILE_W * 2) {
+    ctx.beginPath()
+    ctx.moveTo(px, windowBot)
+    ctx.lineTo(px, skirtY)
+    ctx.stroke()
+  }
+
+  // stainless skirting board along the bottom of the wall
+  ctx.fillStyle = music ? '#8f83a6' : '#7d8694'
+  ctx.fillRect(left.x, skirtY, wallW, TILE_H * 0.35)
+  ctx.fillStyle = 'rgba(255,255,255,0.22)'
+  ctx.fillRect(left.x, skirtY, wallW, 3)
+
+  // ---- window band: one continuous glazed run ----
+  const glass = ctx.createLinearGradient(0, windowTop, 0, windowBot)
+  glass.addColorStop(0, '#9fc9e6')
+  glass.addColorStop(0.55, '#cfe3ee')
+  glass.addColorStop(1, '#b6cdd9')
+  ctx.fillStyle = glass
+  ctx.fillRect(left.x, windowTop, wallW, windowBot - windowTop)
+
+  // the city sliding past behind the glass — two parallax layers, clipped to
+  // the band so it never spills onto the wall
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(left.x, windowTop, wallW, windowBot - windowTop)
+  ctx.clip()
+  const bandH = windowBot - windowTop
+  const far = (now * 40) % 190
+  ctx.fillStyle = 'rgba(112,142,172,0.5)'
+  for (let i = -2; i * 190 - far < wallW + 190; i++) {
+    const bx = left.x + i * 190 - far
+    ctx.fillRect(bx, windowTop + bandH * 0.3, 52, bandH * 0.7)
+    ctx.fillRect(bx + 64, windowTop + bandH * 0.48, 34, bandH * 0.52)
+    ctx.fillRect(bx + 112, windowTop + bandH * 0.38, 44, bandH * 0.62)
+  }
+  const near = (now * 190) % 150
+  ctx.fillStyle = 'rgba(48,92,70,0.7)'
+  for (let i = -2; i * 150 - near < wallW + 150; i++) {
+    const tx = left.x + i * 150 - near
+    ctx.beginPath()
+    ctx.arc(tx, windowBot - bandH * 0.22, 16, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillRect(tx - 2.5, windowBot - bandH * 0.22, 5, bandH * 0.22)
+  }
+  ctx.restore()
+
+  // window mullions — the posts between each pane
+  ctx.fillStyle = music ? '#6f6486' : '#6b7480'
+  for (let px = left.x; px <= right.x; px += TILE_W * 4) {
+    ctx.fillRect(px - 3, windowTop, 6, windowBot - windowTop)
+  }
+  // rubber seals top and bottom
+  ctx.fillStyle = '#4a515c'
+  ctx.fillRect(left.x, windowTop - 5, wallW, 7)
+  ctx.fillRect(left.x, windowBot - 2, wallW, 7)
+
+  // a diagonal sheen so the glass reads as glass
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(left.x, windowTop, wallW, windowBot - windowTop)
+  ctx.clip()
+  ctx.globalAlpha = 0.14
+  ctx.fillStyle = '#ffffff'
+  for (let px = left.x - bandH; px < right.x; px += TILE_W * 5) {
+    ctx.beginPath()
+    ctx.moveTo(px, windowBot)
+    ctx.lineTo(px + bandH * 0.7, windowTop)
+    ctx.lineTo(px + bandH * 1.15, windowTop)
+    ctx.lineTo(px + bandH * 0.45, windowBot)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.restore()
+
+  // ---- roof: curved ceiling with ribs ----
+  const roof = ctx.createLinearGradient(0, roofY, 0, windowTop)
+  roof.addColorStop(0, music ? '#efe0f7' : '#dfe6ee')
+  roof.addColorStop(1, music ? '#c9b6da' : '#b9c3cf')
+  ctx.fillStyle = roof
+  ctx.beginPath()
+  ctx.moveTo(left.x, windowTop)
+  ctx.quadraticCurveTo(left.x + wallW / 2, roofY - TILE_H * 0.7, right.x, windowTop)
+  ctx.lineTo(right.x, windowTop - 4)
+  ctx.quadraticCurveTo(left.x + wallW / 2, roofY - TILE_H * 0.9, left.x, windowTop - 4)
+  ctx.closePath()
+  ctx.fill()
+
+  // fill the ceiling body above the windows
+  ctx.beginPath()
+  ctx.moveTo(left.x, windowTop)
+  ctx.quadraticCurveTo(left.x + wallW / 2, roofY - TILE_H * 0.7, right.x, windowTop)
+  ctx.lineTo(right.x, windowTop)
+  ctx.lineTo(left.x, windowTop)
+  ctx.closePath()
+  ctx.fill()
+
+  // ceiling ribs, spaced like the real coach
+  ctx.strokeStyle = 'rgba(80,95,115,0.28)'
+  ctx.lineWidth = 2
+  for (let px = left.x + TILE_W * 2; px < right.x; px += TILE_W * 4) {
+    const t = (px - left.x) / wallW
+    const dip = Math.sin(t * Math.PI) * TILE_H * 0.55
+    ctx.beginPath()
+    ctx.moveTo(px, windowTop)
+    ctx.lineTo(px, windowTop - dip - TILE_H * 0.35)
+    ctx.stroke()
+  }
+
+  // the lit strip running the length of the ceiling
+  const lit = music ? 0.55 + Math.sin(now * 6.5) * 0.25 : 0.42
+  ctx.fillStyle = music
+    ? `rgba(255,205,245,${lit})`
+    : `rgba(236,246,255,${lit})`
+  ctx.fillRect(left.x, windowTop - TILE_H * 1.5, wallW, 9)
+  ctx.save()
+  ctx.globalAlpha = 0.5
+  ctx.shadowColor = music ? 'rgba(255,180,235,0.9)' : 'rgba(215,236,255,0.9)'
+  ctx.shadowBlur = 22
+  ctx.fillRect(left.x, windowTop - TILE_H * 1.5, wallW, 9)
+  ctx.restore()
+
   ctx.restore()
 }
 
@@ -756,6 +1415,15 @@ export function render(ctx, world, view, state) {
 
   const interior = world.def.interior === true
   const music = world.musicMode === true
+  /**
+   * WHICH interior. Level 2's carriage was the first, so its look (window
+   * band, yellow safety line, the constant rocking of a moving train) was
+   * written straight into the `interior` path. Level 3 is a gym that does
+   * not move and has no windows, so the train-specific parts are gated on
+   * this instead. Defaulting to 'metro' keeps Level 2 byte-identical.
+   */
+  const shell = world.def.shell ?? 'metro'
+  const rig = world.rigOnline === true
 
   if (!interior) {
     // parallax clouds — a slow drift that sells daylight and depth
@@ -781,15 +1449,17 @@ export function render(ctx, world, view, state) {
   } else {
     // Indoors there is no sky to look at, so the ceiling does the work: a
     // lit strip running the length of the carriage, which is also the
-    // easiest thing to make pulse once the music starts.
-    drawCeilingStrip(ctx, w, h, now, music)
+    // easiest thing to make pulse once the music starts. In the gym the same
+    // strip is the RGB lighting, which hue-cycles once the rig boots.
+    drawCeilingStrip(ctx, w, h, now, music, shell, rig)
   }
 
   ctx.save()
   // The carriage is always moving. A gentle vertical rock plus an occasional
   // lateral judder, applied before the camera transform so the whole scene
   // — floor, props, characters — rides together instead of sliding apart.
-  if (interior) {
+  // A gym floor does not do this, so it is gated on the metro shell.
+  if (interior && shell === 'metro') {
     const beat = music ? 1.9 : 1
     const rock = Math.sin(now * 3.1) * 1.3 * beat
     const judder = Math.sin(now * 0.7) * Math.sin(now * 11.3) * 0.9
@@ -799,11 +1469,37 @@ export function render(ctx, world, view, state) {
 
   const g = world.grid
 
+  /**
+   * Straighten the carriage.
+   *
+   * Camera.project() shears every row right by TILE_H * SKEW, which is what
+   * gives the LEGO world its 2.5D tilt. A train is not tilted, and over this
+   * map's rows that shear leans the whole coach into a rhombus.
+   *
+   * Note this CANNOT be fixed with a counter-shear matrix: a shear slants
+   * every shape drawn through it, so cancelling the projection's lean would
+   * simply lean all the axis-aligned coach art by the same amount instead.
+   * The fix is to not shear interior art in the first place — `unproj`
+   * below is the flat cell→screen mapping every interior routine uses, and
+   * PROJECT_FLAT makes characters and props positioned by Camera.project
+   * land in that same flat space.
+   */
+  if (interior) Camera.setFlat(true)
+
+  // ---- the carriage itself, behind every prop ----
+  // Walls, windows and roof are structure, not scenery: without them the
+  // seats and poles float in a void and the level stops reading as a train.
+  if (interior) {
+    const deckY = g.height - 3 // the top of the floor slab
+    if (shell === 'gym') drawGymShell(ctx, 0, g.width, deckY, now, rig)
+    else drawCarriageShell(ctx, 0, g.width, deckY, now, music)
+  }
+
   // ---- scenery, behind everything playable ----
   // Passengers get told about the music so they can move to it; every other
   // prop ignores the flag.
   for (const prop of world.props ?? []) {
-    drawProp(ctx, prop.type === 'passenger' && music ? { ...prop, bob: 1 } : prop, now)
+    drawProp(ctx, prop.type === 'passenger' && music ? { ...prop, bob: 1 } : prop, now, rig)
   }
 
   drawBuildGrid(ctx, world, state.buildMode)
@@ -835,26 +1531,25 @@ export function render(ctx, world, view, state) {
 
   // ---- terrain, drawn back-to-front (top rows first) ----
   const ground = floorPalettes(world.def)
-  for (let y = 0; y < g.height; y++) {
-    if (interior) {
-      // A carriage floor is a surface, not a pile of bricks. Coalesce each
-      // horizontal run of terrain into a single slab so no studs or cell
-      // seams appear — see drawFloorSlab.
-      let x = 0
-      while (x < g.width) {
-        if (g.get(x, y) !== CELL.TERRAIN) {
-          x++
-          continue
-        }
-        let run = 0
-        while (x + run < g.width && g.get(x + run, y) === CELL.TERRAIN) run++
-        // Only the topmost deck row gets a walking surface; the rows beneath
-        // are the underframe and just need their front face.
-        drawFloorSlab(ctx, x, y, run, ground.main, { top: !g.isSolid(x, y - 1) })
-        x += run
-      }
-      continue
+  if (interior) {
+    // A carriage floor is ONE surface. The map's lower rows are collision
+    // geometry, not scenery: drawing each of them produced a stack of grey
+    // slabs stepping out below the coach. The deck is the first FULL-WIDTH
+    // terrain row (the rows above it hold only the end-wall cells at each
+    // end of the coach, which are structure, not floor). Draw it once.
+    let deck = -1
+    for (let y = 0; y < g.height && deck < 0; y++) {
+      let run = 0
+      for (let x = 0; x < g.width; x++) if (g.get(x, y) === CELL.TERRAIN) run++
+      if (run === g.width) deck = y
     }
+    if (deck >= 0) {
+      drawFloorSlab(ctx, 0, deck, g.width, ground.main, {
+        line: shell === 'gym' ? null : undefined,
+      })
+    }
+  }
+  for (let y = 0; y < g.height && !interior; y++) {
     for (let x = 0; x < g.width; x++) {
       const k = g.get(x, y)
       if (k === CELL.TERRAIN) {
@@ -1054,6 +1749,10 @@ export function render(ctx, world, view, state) {
   }
 
   ctx.restore() // camera
+
+  // Flat projection is a per-frame mode, never a global one: clear it before
+  // anything outside this frame (a LEGO level, a hit test) reads it.
+  Camera.setFlat(false)
 
   // ---- music mode, painted over the finished frame ----
   if (music) drawMusicOverlay(ctx, w, h, now)

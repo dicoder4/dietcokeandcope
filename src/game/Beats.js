@@ -20,11 +20,13 @@ import {
   duck,
   unduck,
   metroAmbience,
+  gymAmbience,
   playClip,
   playSynthSong,
   startMusicMode,
 } from './Sound.js'
 import { MUSIC_XP_PER_ROUND } from '../config/songs.js'
+import { GRAPHICS_XP_PER_PUZZLE } from '../config/framebuffers.js'
 
 /** Resolve a beat's `focus` field to a projected world point. */
 function resolveFocus(focus, game) {
@@ -783,11 +785,278 @@ export const BEATS = {
     },
   },
 
+  /**
+   * framebuffer — Level 3's minigame: de-scramble a sitcom scene.
+   *
+   * One beat serves BOTH puzzles, switched on `beat.puzzle.kind`, because
+   * they share a frame (a monitor showing a broken picture), a reward and an
+   * exit condition — only the controls differ. The alternative, two beats
+   * with two nearly identical phase machines, would duplicate the compile
+   * sequence and the XP award for no gain.
+   *
+   * Third in the line of foodBuilder -> songQuiz: all state lives in
+   * `dir.framebuffer`, snapshotted whole each frame, and the UI only reads it
+   * and reports back through thin Director methods.
+   *
+   * SCRANTON (puzzle 1) — pick the right code block:
+   *   picking   — tiles scrambled and flipped; four blocks to choose from
+   *   compiling — COMPILING / BUILD SUCCESSFUL / RUNNING, on a timer
+   *   solved    — tiles snap home, the warmth shader sweeps
+   *   failed    — COMPILATION FAILED, and straight back to picking
+   *
+   * DUNPHY (puzzle 2) — align the strips, then pick a frame rate:
+   *   aligning  — drag the offset until the strips are flush
+   *   fps       — 1 / 60 / 999999, and only 60 gets out
+   *   solved    — buttery
+   *
+   * Wrong answers cost nothing in either puzzle. They are jokes with a retry
+   * button, exactly like a wrong `choice` option.
+   */
+  framebuffer: {
+    enter(dir, beat) {
+      const p = beat.puzzle
+      dir.controlEnabled = false
+      dir.framebuffer = {
+        kind: p.kind,
+        puzzle: p,
+        // scranton
+        phase: p.kind === 'scranton' ? 'picking' : 'aligning',
+        pickedBlock: null,
+        compileStage: null, // 'compiling' | 'success' | 'running'
+        progress: 0,
+        // dunphy
+        offset: p.startOffset ?? 0,
+        aligned: false,
+        fps: null,
+        // shared
+        reaction: null,
+      }
+      dir.state.lastTick = p.startOffset ?? 0
+    },
+
+    update(dir, beat, game) {
+      const fb = dir.framebuffer
+      const st = dir.state
+      const p = fb.puzzle
+      const elapsed = st.t - (st.phaseStart ?? 0)
+
+      // ---- PUZZLE 1: THE OFFICE ----------------------------------------
+      if (fb.kind === 'scranton') {
+        /**
+         * Discard input aimed at a phase we are no longer in. A pick made
+         * during the compile, or a retry pressed on the solved screen, must
+         * not sit in `state` and then fire the next time that phase comes
+         * round — that would answer the puzzle from a stale keypress.
+         */
+        if (fb.phase !== 'picking' && st.fbPick != null) st.fbPick = null
+        if (fb.phase !== 'failed' && st.fbRetry) st.fbRetry = false
+
+        if (fb.phase === 'picking') {
+          if (st.fbPick == null) return false
+          const block = p.blocks[st.fbPick]
+          st.fbPick = null
+          if (!block) return false
+
+          fb.pickedBlock = block.id
+          sfx.codeSnap()
+
+          if (block.correct) {
+            fb.phase = 'compiling'
+            fb.compileStage = 'compiling'
+            fb.progress = 0
+            st.phaseStart = st.t
+            sfx.compileRun()
+          } else {
+            fb.phase = 'failed'
+            fb.reaction = Array.isArray(p.onWrong) ? p.onWrong.join('\n') : p.onWrong
+            st.phaseStart = st.t
+            sfx.compileFail()
+            game.world.camera.kick(0.2)
+          }
+          dir.framebuffer = { ...fb }
+          game.dirty = true
+          return false
+        }
+
+        if (fb.phase === 'failed') {
+          // Retry is instant and free — either the button or any key.
+          if (!st.fbRetry) return false
+          st.fbRetry = false
+          fb.phase = 'picking'
+          fb.pickedBlock = null
+          fb.reaction = null
+          st.phaseStart = st.t
+          dir.framebuffer = { ...fb }
+          game.dirty = true
+          return false
+        }
+
+        if (fb.phase === 'compiling') {
+          // COMPILING (1.1s, bar filling) -> BUILD SUCCESSFUL (0.7s) -> RUNNING (0.6s)
+          const prog = Math.min(1, elapsed / 1.1)
+          if (Math.abs(prog - fb.progress) > 0.02) {
+            fb.progress = prog
+            dir.framebuffer = { ...fb }
+          }
+          const stage =
+            elapsed < 1.1 ? 'compiling' : elapsed < 1.8 ? 'success' : 'running'
+          if (stage !== fb.compileStage) {
+            fb.compileStage = stage
+            if (stage === 'success') sfx.frameRender()
+            dir.framebuffer = { ...fb }
+            game.dirty = true
+          }
+          if (elapsed < 2.4) return false
+
+          fb.phase = 'solved'
+          fb.reaction = p.onCorrect
+          st.phaseStart = st.t
+          dir.framebuffer = { ...fb }
+          game.stats.award({ xp: GRAPHICS_XP_PER_PUZZLE, label: '+GRAPHICS XP' })
+          sfx.win()
+          game.world.camera.kick(0.15)
+          game.dirty = true
+          return false
+        }
+
+        if (fb.phase === 'solved') {
+          return elapsed >= (beat.solvedHold ?? 2.8)
+        }
+        return false
+      }
+
+      // ---- PUZZLE 2: MODERN FAMILY -------------------------------------
+      if (st.fbOffset != null) {
+        const v = st.fbOffset
+        st.fbOffset = null
+        fb.offset = v
+        // a detent click every few px, so dragging feels mechanical without
+        // firing a sound every single pixel of travel
+        if (Math.abs(v - (st.lastTick ?? 0)) >= 7) {
+          st.lastTick = v
+          sfx.sliderTick()
+        }
+        const wasAligned = fb.aligned
+        fb.aligned = Math.abs(v - (p.targetOffset ?? 0)) <= (p.tolerance ?? 6)
+        if (fb.aligned && !wasAligned) {
+          // snap it flush so the picture is perfect, not merely close
+          fb.offset = p.targetOffset ?? 0
+          fb.reaction = p.onAligned ?? null
+          sfx.frameRender()
+          if (fb.phase === 'aligning') {
+            fb.phase = 'fps'
+            st.phaseStart = st.t
+          }
+        } else if (!fb.aligned && wasAligned) {
+          // slid back out of tolerance — take the FPS row away again
+          fb.reaction = null
+          fb.phase = 'aligning'
+          fb.fps = null
+        }
+        dir.framebuffer = { ...fb }
+        game.dirty = true
+      }
+
+      /**
+       * Drop any frame-rate pick made while the row was still locked.
+       * Without this, a pick that arrived during `aligning` would sit in
+       * `state` and fire the instant the strips snapped — answering the
+       * second half of the puzzle for the player from a keypress they made
+       * before it was asked.
+       */
+      if (fb.phase !== 'fps' && st.fbFps != null) st.fbFps = null
+
+      if (fb.phase === 'fps' && st.fbFps != null) {
+        const pick = st.fbFps
+        st.fbFps = null
+        fb.fps = pick
+        fb.reaction = p.fpsReplies?.[pick] ?? null
+
+        if (pick === p.correctFps) {
+          fb.phase = 'solved'
+          st.phaseStart = st.t
+          sfx.win()
+          game.stats.award({ xp: GRAPHICS_XP_PER_PUZZLE, label: '+GRAPHICS XP' })
+          fb.reaction = p.onCorrect ?? fb.reaction
+        } else if (pick >= 999999) {
+          // breaking the continuum: the UI shakes, we make the noise
+          sfx.glitchStatic()
+          game.world.camera.kick(0.5)
+        } else {
+          sfx.quizWrong()
+        }
+        dir.framebuffer = { ...fb }
+        game.dirty = true
+        return false
+      }
+
+      if (fb.phase === 'solved') {
+        return elapsed >= (beat.solvedHold ?? 2.6)
+      }
+      return false
+    },
+
+    exit(dir) {
+      dir.framebuffer = null
+    },
+  },
+
+  /**
+   * rigBuild — the instant-build payoff. The rig assembles itself in two
+   * seconds and the room comes on.
+   *
+   * `world.rigOnline` is the single flag the Renderer reads to light the RGB,
+   * spin the fans and put the restored sitcom scenes on the monitors — same
+   * approach as `world.musicMode` in Level 2, for the same reason: the
+   * renderer should not have to know what part of the script it is in.
+   */
+  rigBuild: {
+    enter(dir, beat, game) {
+      game.world.rigOnline = true
+      game.world.rigStart = game.now
+      sfx.rigAssembly()
+      sfx.fanSpinUp()
+      game.world.camera.kick(0.35)
+      dir.state.booted = false
+      if (beat.banner) {
+        dir.banner = { lines: [beat.banner], sub: beat.sub ?? '', kind: 'good', born: game.now }
+      }
+      game.dirty = true
+    },
+    update(dir, beat, game) {
+      // the power-on beep lands once the assembly montage has had its moment
+      if (!dir.state.booted && dir.state.t > 1.6) {
+        dir.state.booted = true
+        sfx.powerOn()
+        game.world.camera.kick(0.45)
+        game.world.spawnParticles(
+          game.world.player.x + 2,
+          game.world.player.y - 1,
+          '#5ce1e6',
+          44,
+          2.8
+        )
+        game.dirty = true
+      }
+      return dir.state.t > (beat.dur ?? 2.6)
+    },
+    exit(dir) {
+      dir.banner = null
+    },
+  },
+
   /** metroAmbience — the train bed: rumble, rails, air-con. */
   metroAmbience: {
     enter(dir, beat) {
       metroAmbience(beat.on !== false)
       if (beat.chime) sfx.metroChime()
+    },
+  },
+
+  /** gymAmbience — the gym/lab bed: HVAC, case fans, distant weight clanks. */
+  gymAmbience: {
+    enter(dir, beat) {
+      gymAmbience(beat.on !== false)
     },
   },
 

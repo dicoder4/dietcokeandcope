@@ -1834,6 +1834,509 @@ button {
 }
 
 /* ============================================================
+   FRAMEBUFFER — Level 3's sitcom graphics puzzles
+   Deliberately built on the .sq-* panel vocabulary above (root,
+   panel, head, line, letter, key) so the two minigames read as
+   one game. Only what is genuinely new gets an .fb- rule.
+   ============================================================ */
+
+.fb-panel {
+  width: min(860px, 96vw);
+}
+
+.fb-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+/* ---- the CRT ---- */
+
+.fb-monitor {
+  border-radius: 10px;
+  background: #0b0f16;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 10px 26px rgba(0, 0, 0, 0.5),
+    0 0 26px rgba(92, 225, 230, 0.12);
+  overflow: hidden;
+}
+
+.fb-monitor.wide {
+  margin-bottom: 16px;
+}
+
+.fb-monitor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.fb-led {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5ce1e6;
+  box-shadow: 0 0 8px #5ce1e6;
+  animation: fbLed 1.6s ease-in-out infinite;
+}
+
+@keyframes fbLed {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.fb-label {
+  color: #7ef0a0;
+  font-weight: 700;
+}
+
+.fb-status {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 198, 61, 0.16);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.fb-caption {
+  display: none;
+}
+
+/* ---- puzzle 1: the tile matrix ---- */
+
+.fb-tiles {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 2px;
+  aspect-ratio: 1;
+}
+
+.fb-tile {
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  font-size: clamp(18px, 3.4vw, 30px);
+  transition: transform 0.45s cubic-bezier(0.2, 1.15, 0.35, 1), filter 0.45s ease;
+  filter: saturate(0.5) brightness(0.8);
+}
+
+.fb-tiles.solved .fb-tile {
+  filter: saturate(1) brightness(1);
+}
+
+.fb-tile-glyph {
+  line-height: 1;
+  user-select: none;
+}
+
+/* the warm Dunder Mifflin fluorescent sweep on solve */
+.fb-warmth {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 214, 140, 0.55) 50%,
+    transparent 70%
+  );
+  background-size: 260% 100%;
+  animation: fbSweep 1.5s ease-out 0.35s both;
+}
+
+@keyframes fbSweep {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+/* ---- puzzle 1: the code listing ---- */
+
+.fb-code {
+  margin: 0;
+  padding: 12px 13px;
+  border-radius: 10px;
+  background: #0b0f16;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font-family: var(--mono);
+  font-size: clamp(9.5px, 1.05vw, 11.5px);
+  line-height: 1.75;
+  color: #cfe3f7;
+  overflow-x: auto;
+}
+
+.fb-code-line {
+  white-space: pre;
+}
+
+.fb-slot {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px dashed rgba(255, 198, 61, 0.7);
+  background: rgba(255, 198, 61, 0.08);
+  color: var(--gold);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.fb-slot.over {
+  background: rgba(255, 198, 61, 0.26);
+  border-style: solid;
+}
+
+.fb-slot.filled {
+  border-style: solid;
+  border-color: rgba(126, 240, 160, 0.7);
+  background: rgba(126, 240, 160, 0.12);
+  color: #7ef0a0;
+}
+
+.fb-console {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.fb-console-line {
+  animation: bootIn 0.2s ease;
+}
+
+.fb-console-line.good {
+  color: #7ef0a0;
+}
+
+.fb-console-line.bad {
+  color: var(--bad);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.fb-bar {
+  height: 10px;
+  margin: 6px 0;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.fb-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5ce1e6, #7ef0a0);
+  transition: width 0.1s linear;
+}
+
+/* ---- puzzle 1: the draggable code blocks ---- */
+
+.fb-blocks {
+  display: grid;
+  gap: 8px;
+}
+
+.fb-block {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  text-align: left;
+  cursor: grab;
+  animation: dlgIn 0.26s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.fb-block:hover,
+.fb-block:focus-visible {
+  background: rgba(255, 214, 102, 0.16);
+  transform: translateX(4px);
+  outline: none;
+}
+
+.fb-block:active {
+  cursor: grabbing;
+}
+
+.fb-block-code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: clamp(10px, 1.15vw, 12.5px);
+  color: #cfe3f7;
+  overflow-wrap: anywhere;
+}
+
+/* ---- puzzle 2: the strip stack ---- */
+
+.fb-strips {
+  position: relative;
+  display: grid;
+  gap: 1px;
+  padding: 1px;
+  overflow: hidden;
+}
+
+.fb-strip {
+  display: grid;
+  place-items: center;
+  height: clamp(28px, 5.4vh, 44px);
+  font-size: clamp(16px, 2.6vw, 26px);
+  transition: transform 0.08s linear, filter 0.18s ease;
+}
+
+.fb-strips.aligned .fb-strip {
+  transition: transform 0.32s cubic-bezier(0.2, 1.2, 0.35, 1), filter 0.18s ease;
+}
+
+.fb-strip-glyph {
+  line-height: 1;
+  user-select: none;
+}
+
+/* 999999 FPS — breaking the continuum */
+.fb-strips.vibrating .fb-strip {
+  animation: fbVibrate 0.05s linear infinite;
+}
+
+@keyframes fbVibrate {
+  0% {
+    transform: translate(-3px, -2px) scaleY(1.04);
+  }
+  25% {
+    transform: translate(4px, 1px) scaleY(0.96);
+  }
+  50% {
+    transform: translate(-2px, 3px) scaleY(1.05);
+  }
+  75% {
+    transform: translate(3px, -3px) scaleY(0.97);
+  }
+  100% {
+    transform: translate(-3px, 2px) scaleY(1.03);
+  }
+}
+
+/* 1 FPS — a slideshow */
+.fb-strips.stuttering {
+  animation: fbStutter 1s steps(1, end) infinite;
+}
+
+@keyframes fbStutter {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.72;
+  }
+}
+
+.fb-aligned-chip {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(79, 194, 106, 0.85);
+  color: #08210f;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  animation: popIn 0.3s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+/* ---- puzzle 2: the controls ---- */
+
+.fb-control {
+  margin-bottom: 14px;
+}
+
+.fb-control-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.fb-control-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.fb-control-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.fb-slider {
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: transparent;
+  cursor: grab;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.fb-slider:active {
+  cursor: grabbing;
+}
+
+.fb-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(92, 225, 230, 0.3), rgba(255, 198, 61, 0.45));
+}
+
+.fb-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(92, 225, 230, 0.3), rgba(255, 198, 61, 0.45));
+}
+
+.fb-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--gold);
+  box-shadow: 0 3px 0 #b87c12, 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.fb-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--gold);
+  box-shadow: 0 3px 0 #b87c12, 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.fb-slider:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+}
+
+.fb-slider-ends {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.fb-fps {
+  transition: opacity 0.25s ease;
+}
+
+.fb-fps.locked {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.fb-fps-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.fb-fps-btn {
+  flex: 1;
+  padding: 11px 6px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: clamp(10px, 1.2vw, 13px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.fb-fps-btn:hover:not(:disabled),
+.fb-fps-btn:focus-visible:not(:disabled) {
+  background: rgba(255, 214, 102, 0.18);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.fb-fps-btn.on {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.fb-fps-btn:disabled {
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .fb-stage {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 460px) {
+  .fb-panel {
+    padding: 16px 16px 20px;
+  }
+}
+
+/* Motion is the joke in the 999999 FPS gag, but nobody should be made ill
+   by it — the vibration becomes a static red tint instead. */
+@media (prefers-reduced-motion: reduce) {
+  .fb-strips.vibrating .fb-strip {
+    animation: none;
+    filter: saturate(2) hue-rotate(-25deg);
+  }
+  .fb-strips.stuttering {
+    animation: none;
+    opacity: 0.8;
+  }
+  .fb-warmth {
+    animation: none;
+    background: rgba(255, 214, 140, 0.25);
+  }
+  .fb-led {
+    animation: none;
+  }
+}
+
+/* ============================================================
    DEV PANEL — dev builds only, never shipped
    Deliberately plain and slightly ugly: it should never be
    mistaken for part of the game.

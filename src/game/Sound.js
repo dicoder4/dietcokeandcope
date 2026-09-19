@@ -198,6 +198,88 @@ export const sfx = {
     blip({ freq: 988, dur: 0.38, type: 'sine', vol: 0.26 })
     blip({ freq: 740, dur: 0.55, type: 'sine', vol: 0.24, delay: 0.34 })
   },
+
+  // ---- Level 3: the gym, the code, the rig -----------------------------
+
+  /** Her entrance. An "AYYYY" shaped rise — enthusiasm, not melody. */
+  ayyy() {
+    blip({ freq: 440, slideTo: 880, dur: 0.28, type: 'square', vol: 0.26 })
+    blip({ freq: 660, slideTo: 1180, dur: 0.22, type: 'square', vol: 0.2, delay: 0.16 })
+  },
+
+  /** A code block seating into the empty slot. Mechanical, definite. */
+  codeSnap() {
+    blip({ freq: 880, slideTo: 620, dur: 0.05, type: 'square', vol: 0.3 })
+    noise({ dur: 0.04, vol: 0.14 })
+  },
+
+  /** Keystroke. Called repeatedly, so it is deliberately tiny. */
+  keyTap() {
+    blip({ freq: 1100 + Math.random() * 500, dur: 0.018, type: 'square', vol: 0.09 })
+  },
+
+  /** COMPILING... BUILD SUCCESSFUL. A confident ascending run. */
+  compileRun() {
+    const notes = [392, 523, 659, 880]
+    notes.forEach((f, i) =>
+      blip({ freq: f, dur: 0.11, type: 'square', vol: 0.24, delay: i * 0.09 })
+    )
+    blip({ freq: 1175, dur: 0.26, type: 'triangle', vol: 0.28, delay: 0.38 })
+  },
+
+  /** COMPILATION FAILED 💀 — the flat buzzer. */
+  compileFail() {
+    blip({ freq: 196, dur: 0.18, type: 'sawtooth', vol: 0.26 })
+    blip({ freq: 185, dur: 0.34, type: 'sawtooth', vol: 0.24, delay: 0.16 })
+    noise({ dur: 0.16, vol: 0.12, delay: 0.16 })
+  },
+
+  /** A frame landing clean. Short, bright, satisfying. */
+  frameRender() {
+    blip({ freq: 1046, dur: 0.09, type: 'triangle', vol: 0.26 })
+    blip({ freq: 1568, dur: 0.14, type: 'triangle', vol: 0.22, delay: 0.07 })
+  },
+
+  /** 999999 FPS. Space-time complaining. */
+  glitchStatic() {
+    noise({ dur: 0.5, vol: 0.34 })
+    for (let i = 0; i < 7; i++) {
+      blip({
+        freq: 300 + Math.random() * 2200,
+        dur: 0.04,
+        type: 'sawtooth',
+        vol: 0.16,
+        delay: i * 0.06,
+      })
+    }
+  },
+
+  /** Slider detent. Fires as the offset crosses each notch. */
+  sliderTick() {
+    blip({ freq: 1500, dur: 0.012, type: 'square', vol: 0.07 })
+  },
+
+  /** The 2-second build montage: parts going in, fast and mechanical. */
+  rigAssembly() {
+    for (let i = 0; i < 11; i++) {
+      const d = i * 0.14
+      blip({ freq: 260 + i * 55, slideTo: 170 + i * 40, dur: 0.06, type: 'square', vol: 0.24, delay: d })
+      noise({ dur: 0.05, vol: 0.15, delay: d })
+    }
+  },
+
+  /** Case fans spinning up from nothing to a steady whirr. */
+  fanSpinUp() {
+    blip({ freq: 40, slideTo: 260, dur: 1.5, type: 'sawtooth', vol: 0.14 })
+    noise({ dur: 1.5, vol: 0.2 })
+  },
+
+  /** The power button. Deep bass drop, then the POST beep. */
+  powerOn() {
+    blip({ freq: 180, slideTo: 38, dur: 0.9, type: 'sine', vol: 0.4 })
+    noise({ dur: 0.35, vol: 0.2 })
+    blip({ freq: 1046, dur: 0.3, type: 'square', vol: 0.3, delay: 0.95 })
+  },
 }
 
 // ======================================================================
@@ -272,6 +354,83 @@ function stopAmbience(fade = 0.6) {
 export function metroAmbience(on) {
   if (!enabled) return
   if (on) startAmbience()
+  else stopAmbience()
+}
+
+// ======================================================================
+//  LEVEL 3 — THE GYM / PC LAB
+//
+//  Same shape as the metro bed above, different character: an HVAC hum
+//  and case-fan whirr instead of rolling stock, with occasional distant
+//  weight clanks so the room sounds occupied. Reuses the same `ambience`
+//  handle, so a level can only have one bed at a time and loadLevel's
+//  stopAllAudio() already tears this down.
+// ======================================================================
+
+/** Timer for the sporadic weight-clank gag. Cleared when the bed stops. */
+let gymClanks = null
+
+function startGymAmbience() {
+  const c = ensure()
+  if (!c || ambience) return
+  const g = c.createGain()
+  g.gain.value = 0
+  g.gain.linearRampToValueAtTime(0.42, c.currentTime + 1.2)
+  g.connect(master)
+
+  // HVAC hum — higher and steadier than the train's rumble
+  const hum = c.createOscillator()
+  hum.type = 'sine'
+  hum.frequency.value = 72
+  const hg = c.createGain()
+  hg.gain.value = 0.2
+  hum.connect(hg)
+  hg.connect(g)
+  hum.start()
+
+  // case fans: narrow-band noise, the sound of a room full of computers
+  const frames = Math.floor(c.sampleRate * 2)
+  const buf = c.createBuffer(1, frames, c.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < frames; i++) d[i] = (Math.random() * 2 - 1) * 0.5
+  const src = c.createBufferSource()
+  src.buffer = buf
+  src.loop = true
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 1300
+  bp.Q.value = 0.8
+  const ng = c.createGain()
+  ng.gain.value = 0.13
+  src.connect(bp)
+  bp.connect(ng)
+  ng.connect(g)
+  src.start()
+
+  // Somebody, somewhere, drops a plate. Irregular on purpose.
+  const clank = () => {
+    blip({ freq: 150 + Math.random() * 60, slideTo: 70, dur: 0.16, type: 'square', vol: 0.12 })
+    noise({ dur: 0.2, vol: 0.09 })
+    gymClanks = setTimeout(clank, 5200 + Math.random() * 7000)
+  }
+  gymClanks = setTimeout(clank, 3400 + Math.random() * 3000)
+
+  ambience = {
+    g,
+    stop: () => {
+      if (gymClanks) {
+        clearTimeout(gymClanks)
+        gymClanks = null
+      }
+      try { hum.stop() } catch { /* already stopped */ }
+      try { src.stop() } catch { /* already stopped */ }
+    },
+  }
+}
+
+export function gymAmbience(on) {
+  if (!enabled) return
+  if (on) startGymAmbience()
   else stopAmbience()
 }
 

@@ -126,6 +126,13 @@ export function drawCharacter(ctx, charId, x, y, pose = {}) {
     ctx.lineTo(cx - bodyW * 0.72, ty - bodyH * 0.16)
     ctx.moveTo(cx + bodyW * 0.45, ty + bodyH * 0.1)
     ctx.lineTo(cx + bodyW * 0.72, ty - bodyH * 0.16)
+  } else if (reaction === 'victory') {
+    // arms thrown straight up, with a little pump — the victory pose
+    const pump = Math.sin(animT * 9) * 3
+    ctx.moveTo(cx - bodyW * 0.45, ty + bodyH * 0.1)
+    ctx.lineTo(cx - bodyW * 0.66, ty - bodyH * 0.42 + pump)
+    ctx.moveTo(cx + bodyW * 0.45, ty + bodyH * 0.1)
+    ctx.lineTo(cx + bodyW * 0.66, ty - bodyH * 0.42 - pump)
   } else {
     ctx.moveTo(cx - bodyW * 0.45, ty + bodyH * 0.1)
     ctx.lineTo(cx - bodyW * 0.62, ty + bodyH * 0.3 + armSwing * 0.4)
@@ -383,6 +390,43 @@ function drawStylizedHead(ctx, c, cx, cy, hr, facing, animT, talking, reaction) 
     case 'embarrassed':
       flatEyes()
       break
+    case 'concentration':
+      // narrowed, locked on the screen. Both eyes squeezed to slits with
+      // brows angled down — "I am reading this code very hard."
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(cx + ex - 5.4, ey)
+      ctx.lineTo(cx + ex - 1.4, ey)
+      ctx.moveTo(cx + ex + 1.4, ey)
+      ctx.lineTo(cx + ex + 5.4, ey)
+      ctx.stroke()
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(cx + ex - 5.8, ey - hr * 0.26)
+      ctx.lineTo(cx + ex - 1.6, ey - hr * 0.16)
+      ctx.moveTo(cx + ex + 1.6, ey - hr * 0.16)
+      ctx.lineTo(cx + ex + 5.8, ey - hr * 0.26)
+      ctx.stroke()
+      break
+    case 'relief':
+      // eyes closed, exhaling. Same arcs as happy but flatter and lower.
+      ctx.lineWidth = 1.6
+      ctx.beginPath()
+      ctx.arc(cx + ex - 3.4, ey + hr * 0.02, 2.8, Math.PI * 1.05, Math.PI * 1.95)
+      ctx.arc(cx + ex + 3.4, ey + hr * 0.02, 2.8, Math.PI * 1.05, Math.PI * 1.95)
+      ctx.stroke()
+      break
+    case 'frustration':
+      // brows slammed together over hard dots
+      dotEyes(2.2)
+      ctx.lineWidth = 1.8
+      ctx.beginPath()
+      ctx.moveTo(cx + ex - 6, ey - hr * 0.3)
+      ctx.lineTo(cx + ex - 1.2, ey - hr * 0.13)
+      ctx.moveTo(cx + ex + 1.2, ey - hr * 0.13)
+      ctx.lineTo(cx + ex + 6, ey - hr * 0.3)
+      ctx.stroke()
+      break
     case 'confused':
       // one eye narrowed, one normal — the "…what" face
       ctx.beginPath()
@@ -419,6 +463,29 @@ function drawStylizedHead(ctx, c, cx, cy, hr, facing, animT, talking, reaction) 
       ctx.ellipse(cx + s * hr * 0.58, cy + hr * 0.38, hr * 0.22, hr * 0.13, 0, 0, Math.PI * 2)
       ctx.fill()
     }
+  }
+  if (reaction === 'frustration') {
+    // the anger tick on the temple
+    ctx.strokeStyle = '#e2453c'
+    ctx.lineWidth = 1.6
+    const tx = cx - hr * 0.72
+    const ty = cy - hr * 0.6
+    ctx.beginPath()
+    ctx.moveTo(tx - 3, ty - 3)
+    ctx.lineTo(tx + 3, ty + 3)
+    ctx.moveTo(tx + 3, ty - 3)
+    ctx.lineTo(tx - 3, ty + 3)
+    ctx.stroke()
+    ctx.strokeStyle = ink
+  }
+  if (reaction === 'relief') {
+    // the exhale, puffing off to the side
+    ctx.strokeStyle = 'rgba(200,225,245,0.6)'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(cx + hr * 0.95, cy + hr * 0.5, 3.2, Math.PI * 0.8, Math.PI * 1.9)
+    ctx.stroke()
+    ctx.strokeStyle = ink
   }
 
   // ---- mouth ----
@@ -457,6 +524,25 @@ function drawStylizedHead(ctx, c, cx, cy, hr, facing, animT, talking, reaction) 
     ctx.beginPath()
     ctx.moveTo(cx + ex - hr * 0.2, cy + hr * 0.52)
     ctx.lineTo(cx + ex + hr * 0.2, cy + hr * 0.52)
+    ctx.stroke()
+  } else if (reaction === 'concentration') {
+    // tongue-out focus: a small flat mouth pushed to one side
+    ctx.lineWidth = 1.7
+    ctx.beginPath()
+    ctx.moveTo(cx + ex - hr * 0.16, cy + hr * 0.5)
+    ctx.lineTo(cx + ex + hr * 0.1, cy + hr * 0.54)
+    ctx.stroke()
+  } else if (reaction === 'relief') {
+    // a small soft smile — the "oh thank god" face
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(cx + ex, cy + hr * 0.4, hr * 0.22, 0.2 * Math.PI, 0.8 * Math.PI)
+    ctx.stroke()
+  } else if (reaction === 'frustration') {
+    // downturned
+    ctx.lineWidth = 1.7
+    ctx.beginPath()
+    ctx.arc(cx + ex, cy + hr * 0.74, hr * 0.28, 1.15 * Math.PI, 1.85 * Math.PI)
     ctx.stroke()
   } else if (reaction === 'confused') {
     // wavy

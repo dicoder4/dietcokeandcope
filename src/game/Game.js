@@ -32,12 +32,13 @@ import {
 
 import level1 from '../levels/level1.js'
 import level2 from '../levels/level2.js'
+import level3 from '../levels/level3.js'
 
-export const LEVELS = [level1, level2]
+export const LEVELS = [level1, level2, level3]
 
 /**
  * The adventure is four worlds (MSRIT shawarma quest, metro headphones, gym
- * PC build, the bear kitchen), the first two of which are built so far.
+ * PC build, the bear kitchen), the first three of which are built so far.
  * `isFinal` below is deliberately NOT `levelIndex === LEVELS.length - 1` —
  * that would make Level 1 "final" (and route into the birthday-cake Ending
  * screen) just because it's the only one that exists yet. TOTAL_LEVELS is
@@ -271,6 +272,37 @@ export class Game {
         continue
       }
 
+      // The framebuffer puzzles own the keyboard the same way. Puzzle 1:
+      // 1-4 drop a code block, Enter/Space retries a failed build. Puzzle 2
+      // is driven by the arrow keys, which are held state rather than edges
+      // and so are handled in tick() — see stepFramebufferSlider().
+      if (d.framebuffer) {
+        if (e === 'pause') {
+          this.setPaused(!this.paused)
+          continue
+        }
+        const fb = d.framebuffer
+        if (e === 'confirm' || e === 'place') {
+          if (fb.phase === 'failed') {
+            d.retryFramebuffer()
+            this.pushState()
+          }
+          continue
+        }
+        const pick = /^slot(\d)$/.exec(e)
+        if (pick) {
+          const i = Number(pick[1]) - 1
+          if (fb.kind === 'scranton' && fb.phase === 'picking' && i < fb.puzzle.blocks.length) {
+            d.pickCodeBlock(i)
+            this.pushState()
+          } else if (fb.kind === 'dunphy' && fb.phase === 'fps' && i < fb.puzzle.fpsOptions.length) {
+            d.pickFrameRate(fb.puzzle.fpsOptions[i])
+            this.pushState()
+          }
+        }
+        continue
+      }
+
       // Building verbs are inert outside a build phase.
       const buildVerb =
         e === 'place' ||
@@ -407,6 +439,30 @@ export class Game {
     this.pushState()
   }
 
+  /**
+   * Arrow-key nudging for the SHIFT_OFFSET slider.
+   *
+   * This lives here rather than in handleEdges because left/right are HELD
+   * state, not one-shot edges — holding the key should scrub the strips
+   * smoothly, the same way holding it walks the player. The range input in
+   * the overlay covers mouse and its own keyboard handling; this is what
+   * makes the puzzle playable without ever touching the mouse.
+   */
+  stepFramebufferSlider(dt) {
+    const fb = this.director.framebuffer
+    if (!fb || fb.kind !== 'dunphy' || fb.phase === 'solved') return
+    const dir = (this.input.right ? 1 : 0) - (this.input.left ? 1 : 0)
+    if (!dir) return
+    const p = fb.puzzle
+    const lo = p.sliderMin ?? -100
+    const hi = p.sliderMax ?? 100
+    const next = Math.max(lo, Math.min(hi, fb.offset + dir * 46 * dt))
+    if (next !== fb.offset) {
+      this.director.setStripOffset(next)
+      this.pushState()
+    }
+  }
+
   // ---------------------------------------------------------------- tick
   tick(dt) {
     // The dev panel pauses the game, which stops handleEdges() below from
@@ -419,6 +475,7 @@ export class Game {
     const d = this.director
 
     this.handleEdges()
+    this.stepFramebufferSlider(dt)
 
     // The story script advances here, and may take away the controls.
     d.update(dt)

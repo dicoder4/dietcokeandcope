@@ -125,14 +125,11 @@ const level2 = {
     { t: 'camera', focus: 'player', zoom: 1, dur: 1.6, ease: 0.05, track: true },
     { t: 'cameraRelease' },
 
-    {
-      t: 'mission',
-      icon: '🎧',
-      title: 'FIND THE HEADPHONES',
-      text: 'Diya is waiting. Go say hi.',
-      dur: 2.6,
-      control: true,
-    },
+    // No mission card yet. He has no idea anything is wrong — the headphones
+    // only become an objective once Diya asks about them. Handing the player
+    // a "FIND THE HEADPHONES" card here would spoil her question before she
+    // gets to ask it.
+    { t: 'mission', icon: '🚇', title: 'NAMMA METRO', text: 'Diya is down the carriage. Go say hi.', dur: 2.4, control: true },
 
     // he walks down the carriage; she clocks him
     { t: 'waitFor', cond: 'playerReachedX', x: 15 },
@@ -342,12 +339,14 @@ const level2 = {
   ],
 
   // The music keeps going quietly, the camera pulls back, the train carries
-  // on. Level 3 is not built yet, so this card holds — same convention
-  // Level 1 used until this level existed.
+  // on. Level 3 exists now, so this card is a TIMED transition rather than a
+  // hold: without a `dur` the beat never completes, `storyDone` never fires,
+  // and App.jsx never loads the gym. Same change Level 1 made the moment
+  // this level was built.
   outroBeats: [
     { t: 'camera', focus: { x: 18, y: 8 }, zoom: 0.6, dur: 3.2, ease: 0.03 },
     { t: 'say', who: 'diya', text: 'Okay. Majestic next.', auto: true, dur: 2.0 },
-    { t: 'nextLocation', icon: '🏋️', title: 'THE GYM', hold: true },
+    { t: 'nextLocation', icon: '🏋️', title: 'THE GYM', dur: 3.4 },
   ],
 }
 
