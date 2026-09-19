@@ -15,7 +15,16 @@
  */
 
 import { Camera } from './Camera.js'
-import { sfx } from './Sound.js'
+import {
+  sfx,
+  duck,
+  unduck,
+  metroAmbience,
+  playClip,
+  playSynthSong,
+  startMusicMode,
+} from './Sound.js'
+import { MUSIC_XP_PER_ROUND } from '../config/songs.js'
 
 /** Resolve a beat's `focus` field to a projected world point. */
 function resolveFocus(focus, game) {
@@ -61,6 +70,38 @@ function scoreShawarma(fb) {
     overall,
     messLevel: Math.min(99, 40 + totalPicks * 7 + Math.floor(Math.random() * 15)),
     sauceChaos: (fb.selections.sauce?.length ?? 0) >= 3 ? 'MAX' : 'MODERATE',
+  }
+}
+
+/**
+ * Start a quiz round's audio. Tries the real clip first; if the file is
+ * absent or unplayable, falls back to the round's procedural melody so the
+ * round still happens. The repo ships no audio files, so out of the box this
+ * always takes the synth path — see public/songs/README.md.
+ *
+ * Returns a handle with .stop(), which is how the beat cuts the music before
+ * the answer choices appear.
+ */
+function startRoundAudio(round) {
+  if (!round) return null
+  const seconds = round.seconds ?? 7
+  duck(0.34, 0.25)
+
+  if (!round.clip) return playSynthSong(round.synth, seconds)
+
+  let fallback = null
+  const clip = playClip(round.clip, {
+    seconds,
+    onMissing: () => {
+      fallback = playSynthSong(round.synth, seconds)
+    },
+  })
+  // One handle covering whichever source actually ended up playing.
+  return {
+    stop() {
+      clip.stop()
+      fallback?.stop()
+    },
   }
 }
 
@@ -619,6 +660,189 @@ export const BEATS = {
     },
     exit(dir) {
       dir.foodBuilder = null
+    },
+  },
+
+  /**
+   * songQuiz — Level 2's minigame: GUESS THE SONG, three rounds.
+   *
+   * Structurally the twin of `foodBuilder` above: all state lives in
+   * `dir.songQuiz`, snapshotted whole each frame, and the UI only reads it
+   * and reports picks back through two thin Director methods.
+   *
+   * Each round is a small state machine:
+   *
+   *   playing   — a clip (or a synth melody) plays for `seconds`
+   *   answering — audio STOPS, then the four choices appear. The song is
+   *               never audible underneath them; that is the brief.
+   *   result    — ✓/✗ plus Diya's reaction, then the next round
+   *
+   * Getting one wrong costs nothing but dignity. The rounds always advance —
+   * this is a joke between friends, not an exam.
+   */
+  songQuiz: {
+    enter(dir, beat, game) {
+      dir.controlEnabled = false
+      metroAmbience(false)
+      dir.songQuiz = {
+        rounds: beat.rounds,
+        roundIndex: 0,
+        phase: 'playing',
+        picked: null,
+        wasCorrect: null,
+        score: 0,
+        reaction: null,
+      }
+      dir.state.audio = startRoundAudio(beat.rounds[0])
+      dir.state.phaseStart = 0
+      void game
+    },
+
+    update(dir, beat, game) {
+      const q = dir.songQuiz
+      const st = dir.state
+      const round = q.rounds[q.roundIndex]
+      const elapsed = st.t - (st.phaseStart ?? 0)
+
+      // let the player hear it again — the clip restarts, the timer with it
+      if (st.songReplay) {
+        st.songReplay = false
+        if (q.phase === 'playing') {
+          st.audio?.stop()
+          st.audio = startRoundAudio(round)
+          st.phaseStart = st.t
+          game.dirty = true
+        }
+      }
+
+      if (q.phase === 'playing') {
+        if (elapsed < (round.seconds ?? 7)) return false
+        // cut the music before the choices go up
+        st.audio?.stop()
+        st.audio = null
+        q.phase = 'answering'
+        q.picked = null
+        st.phaseStart = st.t
+        dir.songQuiz = { ...q }
+        sfx.select()
+        game.dirty = true
+        return false
+      }
+
+      if (q.phase === 'answering') {
+        if (st.songPick == null) return false
+        const pick = round.choices[st.songPick]
+        st.songPick = null
+        if (!pick) return false
+
+        const right = pick.id === round.correct
+        q.picked = pick.id
+        q.wasCorrect = right
+        q.phase = 'result'
+        st.phaseStart = st.t
+
+        if (right) {
+          q.score += 1
+          q.reaction = round.onCorrect ?? 'Lessgoooo'
+          game.stats.award({ xp: MUSIC_XP_PER_ROUND, label: '+MUSIC XP' })
+          sfx.quizCorrect()
+        } else {
+          const w = round.onWrong ?? 'Bro…'
+          q.reaction = Array.isArray(w) ? w.join('\n') : w
+          sfx.quizWrong()
+        }
+        dir.songQuiz = { ...q }
+        game.dirty = true
+        return false
+      }
+
+      // result — hold on the verdict, then roll on regardless of the answer
+      if (q.phase === 'result') {
+        if (elapsed < (beat.resultHold ?? 2.6)) return false
+        if (q.roundIndex + 1 >= q.rounds.length) return true
+        q.roundIndex += 1
+        q.phase = 'playing'
+        q.picked = null
+        q.wasCorrect = null
+        q.reaction = null
+        st.phaseStart = st.t
+        st.audio = startRoundAudio(q.rounds[q.roundIndex])
+        dir.songQuiz = { ...q }
+        game.dirty = true
+        return false
+      }
+
+      return false
+    },
+
+    exit(dir) {
+      dir.state.audio?.stop()
+      dir.state.audio = null
+      dir.songQuiz = null
+      unduck(0.4)
+    },
+  },
+
+  /** metroAmbience — the train bed: rumble, rails, air-con. */
+  metroAmbience: {
+    enter(dir, beat) {
+      metroAmbience(beat.on !== false)
+      if (beat.chime) sfx.metroChime()
+    },
+  },
+
+  /** sting — fire one named one-shot from the sfx table. */
+  sting: {
+    enter(dir, beat) {
+      sfx[beat.kind]?.()
+      if (beat.shake) dir.game.world.camera.kick(beat.shake)
+    },
+  },
+
+  /**
+   * earphones — move the pink earphones between hanging and worn.
+   *
+   * They are NOT a world item. They are drawn on the character from the
+   * first frame of the level (see Characters.js), looped through his shirt,
+   * which is the entire setup for the punchline. This beat only changes how
+   * they are worn, never whether they exist.
+   */
+  earphones: {
+    enter(dir, beat, game) {
+      const who = beat.who ?? 'player'
+      const target = who === 'player' ? game.world.player : findNpc(game, who)
+      if (target) target.accessory = beat.state ?? 'earphonesWorn'
+      if (beat.state === 'earphonesWorn') sfx.pickup()
+      game.dirty = true
+    },
+  },
+
+  /**
+   * musicMode — the transformation. Everything the Renderer needs is behind
+   * one world flag: warmer light, a visualiser, passengers moving to the
+   * beat, a harder train sway. The music itself starts here.
+   */
+  musicMode: {
+    enter(dir, beat, game) {
+      const on = beat.on !== false
+      game.world.musicMode = on
+      game.world.musicStart = game.now
+      if (on) {
+        unduck(0.3)
+        startMusicMode()
+        game.world.camera.kick(0.25)
+        game.world.spawnParticles(
+          game.world.player.x,
+          game.world.player.y - 1,
+          '#ff5fa2',
+          40,
+          2.4
+        )
+      }
+      game.dirty = true
+    },
+    update(dir, beat) {
+      return dir.state.t > (beat.dur ?? 0)
     },
   },
 

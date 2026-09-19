@@ -90,6 +90,12 @@ export class World {
     for (const n of def.npcs ?? []) this.npcs.push(new Npc(n))
 
     this.player = new Player(this.startCell.x, this.startCell.y)
+    // Worn from the first frame, not spawned mid-level. Level 2's whole joke
+    // depends on the pink earphones being visibly on him the entire time he
+    // is looking for them — see Characters.js.
+    this.player.accessory = def.playerAccessory ?? null
+    this.musicMode = false
+    this.musicStart = 0
     this.building.loadInventory(def.inventory ?? {})
 
     const wp = Camera.project(this.player.x, this.player.y)
@@ -112,11 +118,17 @@ export class World {
     const savedShown = this.collectibles?.filter((c) => !c.hidden).map((c) => c.label)
     const savedShownGoals = this.goals?.filter((g) => !g.hidden).map((g) => g.label)
     const wasComplete = this.complete
+    // Once the earphones are in his ears, a death must not put them back on
+    // his shirt — that would replay the punchline he has already had.
+    const savedAccessory = this.player?.accessory
+    const savedMusicMode = this.musicMode
 
     this.build(this.def)
     // keep the completion latch, or restoring reached goals below would
     // re-fire levelComplete on every respawn
     this.complete = wasComplete ?? false
+    if (savedAccessory !== undefined) this.player.accessory = savedAccessory
+    this.musicMode = savedMusicMode ?? false
 
     if (savedNpcs) {
       for (const s of savedNpcs) {

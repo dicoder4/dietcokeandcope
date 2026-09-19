@@ -1,28 +1,41 @@
 /**
- * validateLevels.mjs — offline sanity checker for level geometry.
+ * validateLevels.mjs — offline sanity checker for levels.
  *
- * This is a sanity check, not a theorem prover. It answers three questions
- * that catch the level-design bugs that actually happen:
+ * This is a sanity check, not a theorem prover. What gets checked depends on
+ * what kind of level it is, declared as `mechanic` in the level definition —
+ * because building is Level 1's mechanic, not a rule of the game. Every level
+ * gets its own.
  *
+ * mechanic: 'build'  (Level 1 — LEGO)
  *   1. Does the player spawn somewhere legal, standing on real floor?
- *   2. Is the goal UNREACHABLE without building? (it must be — that is the
- *      entire design thesis of the game)
+ *   2. Is the goal UNREACHABLE without building? (for a build level it must
+ *      be — that is the entire point of the level)
  *   3. Does a HAND-AUTHORED reference solution reach the goal, using only
  *      bricks the level actually gives you?
  *
- * Point 3 is the important one and it is deliberately not a search. Each
- * level ships a `reference` solution in its definition: the list of bricks a
- * designer knows works. We replay it through the real movement rules. If the
- * reference stops working after a map edit, this fails loudly — which is
- * exactly when a human should look.
+ *   Point 3 is the important one and it is deliberately not a search. Each
+ *   build level ships a `reference` solution: the list of bricks a designer
+ *   knows works. We replay it through the real movement rules. If the
+ *   reference stops working after a map edit, this fails loudly — which is
+ *   exactly when a human should look.
+ *
+ * mechanic: 'story'  (Level 2 — the metro music quiz)
+ *   1. Does the player spawn somewhere legal?
+ *   2. Is every goal reachable BY WALKING? (there are no bricks to help)
+ *   3. Do the script's references resolve — every npc id in the cast, every
+ *      `reveal`/`waitFor` label pointing at something that exists? A typo in
+ *      a beat is the failure mode that actually bites a scripted level, and
+ *      it is invisible until you play all the way to that beat.
  *
  * Run: npm run validate
  */
 
 import level1 from '../src/levels/level1.js'
+import level2 from '../src/levels/level2.js'
 import { BLOCK_TYPES, footprint } from '../src/entities/Block.js'
+import { CAST } from '../src/config/gameConfig.js'
 
-const LEVELS = [level1]
+const LEVELS = [level1, level2]
 
 const SOLID = new Set(['#', '=', '|', '_', 'B'])
 const FATAL_FALL = 6
@@ -141,9 +154,60 @@ const fail = (msg) => {
   console.log('     ✗ ' + msg)
 }
 
+/**
+ * Walk a scripted level's beats and confirm everything it names exists.
+ * Cheap, and it catches the one bug class that a story level really suffers
+ * from: a mistyped id that silently strands the script forever.
+ */
+function checkStoryScript(def) {
+  const beats = [...(def.beats ?? []), ...(def.outroBeats ?? [])]
+  const npcIds = new Set((def.npcs ?? []).map((n) => n.id))
+  const labels = new Set([
+    ...(def.collectibles ?? []).map((c) => c.label),
+    ...(def.goals ?? []).map((g) => g.label),
+  ])
+
+  for (const n of def.npcs ?? []) {
+    if (!CAST[n.id]) fail('npc "' + n.id + '" is not in the CAST (gameConfig.js)')
+  }
+
+  for (const b of beats) {
+    if ((b.t === 'npcWalk' || b.t === 'npcShow' || b.t === 'npcHide') && !npcIds.has(b.id)) {
+      fail('beat "' + b.t + '" refers to unknown npc "' + b.id + '"')
+    }
+    if (b.t === 'say' || b.t === 'choice' || b.t === 'react' || b.t === 'earphones') {
+      const who = b.who ?? 'player'
+      if (who !== 'player' && !npcIds.has(who)) {
+        fail('beat "' + b.t + '" is spoken by unknown character "' + who + '"')
+      }
+    }
+    if (b.t === 'reveal') {
+      const want = Array.isArray(b.labels) ? b.labels : [b.labels]
+      for (const l of want) {
+        if (!labels.has(l)) fail('reveal names "' + l + '", which no collectible or goal has')
+      }
+    }
+    if (b.t === 'waitFor' && (b.cond === 'goalReached' || b.cond === 'collected') && b.id) {
+      if (!labels.has(b.id)) fail('waitFor "' + b.cond + '" names unknown label "' + b.id + '"')
+    }
+    if (b.t === 'songQuiz') {
+      const rounds = b.rounds ?? []
+      if (!rounds.length) fail('songQuiz beat has no rounds')
+      for (const r of rounds) {
+        if (!r.choices?.length) fail('song round "' + r.id + '" has no choices')
+        else if (!r.choices.some((c) => c.id === r.correct)) {
+          fail('song round "' + r.id + '" has correct id "' + r.correct + '" not among its choices')
+        }
+      }
+    }
+  }
+  console.log('     ✓ script references resolve (' + beats.length + ' beats checked)')
+}
+
 for (const def of LEVELS) {
   console.log('─'.repeat(64))
-  console.log('LEVEL ' + def.id + ' — ' + def.name)
+  const mechanic = def.mechanic ?? 'build'
+  console.log('LEVEL ' + def.id + ' — ' + def.name + '   [' + mechanic + ']')
 
   const goals = def.goals ?? []
   const key = (x, y) => x + ',' + y
@@ -159,6 +223,27 @@ for (const def of LEVELS) {
       if (reach.size === 0) fail('player spawn immediately dies (void or hazard below)')
       else console.log('     ✓ spawn is legal (' + reach.size + ' cells walkable bare)')
     }
+  }
+
+  // ====================================================================
+  // STORY LEVELS — no bricks. The goal must be WALKABLE, and the script
+  // must not name anything that doesn't exist.
+  // ====================================================================
+  if (mechanic === 'story') {
+    const { grid, start } = parse(def, { openGates: true })
+    const reach = reachable(grid, start)
+    if (!goals.length) {
+      console.log('     ! no goals declared (fine if the script drives everything)')
+    } else if (goalReached(reach)) {
+      console.log('     ✓ every goal is reachable on foot')
+    } else {
+      const missing = goals.filter((gl) => !reach.has(key(gl.x, gl.y)))
+      fail(
+        'goal not walkable: ' + missing.map((m) => m.label + '@' + m.x + ',' + m.y).join(', ')
+      )
+    }
+    checkStoryScript(def)
+    continue
   }
 
   // --- 2. unreachable without building --------------------------------
@@ -260,7 +345,7 @@ for (const def of LEVELS) {
     }
   }
 
-  const invTotal = Object.values(def.inventory).reduce((a, b) => a + b, 0)
+  const invTotal = Object.values(def.inventory ?? {}).reduce((a, b) => a + b, 0)
   const pickupTotal = (def.collectibles ?? [])
     .filter((c) => c.kind === 'brick')
     .reduce((a, c) => a + c.count, 0)

@@ -7,6 +7,19 @@ import LevelComplete from './ui/LevelComplete.jsx'
 import Ending from './ui/Ending.jsx'
 import Dialogue from './ui/Dialogue.jsx'
 import FoodBuilder from './ui/FoodBuilder.jsx'
+import SongQuiz from './ui/SongQuiz.jsx'
+/**
+ * The dev panel is excluded from production builds at the MODULE level, not
+ * merely hidden behind a runtime flag. `import.meta.env.DEV` written bare
+ * like this is the one spelling Vite substitutes a literal `false` for, so
+ * the dynamic import below is unreachable and DevPanel.jsx never enters the
+ * bundle. A runtime `if (DEV)` inside the component is NOT enough — the
+ * module still ships, strings and all. Nobody opening the birthday build
+ * should find a level-skip menu.
+ */
+const DevPanel = import.meta.env.DEV
+  ? React.lazy(() => import('./ui/DevPanel.jsx'))
+  : null
 import Cinematic, { Banner } from './ui/Cinematic.jsx'
 import gameConfig from './config/gameConfig.js'
 import { setSfxEnabled, resumeAudio } from './game/Sound.js'
@@ -67,6 +80,12 @@ export default function App() {
       },
     })
     gameRef.current = game
+    // Dev-only: bolt on level skipping and script fast-forward. The import
+    // is unreachable in a production build (see the DevPanel note above), so
+    // DevTools.js never enters the bundle.
+    if (import.meta.env.DEV) {
+      import('./game/DevTools.js').then((m) => m.attachDevTools(game))
+    }
     game.loadLevel(pendingLevelRef.current ?? 0)
     game.start()
     resumeAudio()
@@ -168,7 +187,10 @@ export default function App() {
     )
   }
 
-  const paused = state?.paused && !complete
+  // The dev panel takes over the pause overlay while it is open, so the two
+  // never stack on top of each other.
+  const devOpen = state?.devPanelOpen && !complete
+  const paused = state?.paused && !complete && !devOpen
 
   return (
     <div className="game-root">
@@ -254,6 +276,25 @@ export default function App() {
         />
       )}
 
+      {/* guess the song */}
+      {state?.songQuiz && !complete && (
+        <SongQuiz
+          quiz={state.songQuiz}
+          onPick={(i) => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.pickSong(i)
+            g.pushState()
+          }}
+          onReplay={() => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.replaySong()
+            g.pushState()
+          }}
+        />
+      )}
+
       {/* achievement pop-ups */}
       <div className="achv">
         {achievements.map((a) => (
@@ -281,6 +322,36 @@ export default function App() {
 
       {complete && (
         <LevelComplete result={complete} treats={treats} onNext={onNext} onReplay={onReplay} />
+      )}
+
+      {/* dev tools — DevPanel is null in production, so this never renders */}
+      {devOpen && DevPanel && (
+        <React.Suspense fallback={null}>
+        <DevPanel
+          state={state}
+          onGotoLevel={(i) => {
+            const g = gameRef.current
+            if (!g) return
+            setComplete(null)
+            setOutro(false)
+            setUnlocked((u) => Math.max(u, i))
+            g.devGotoLevel(i)
+          }}
+          onSkipMission={(i) => gameRef.current?.devSkipToMission(i)}
+          onSkipBeat={() => {
+            const g = gameRef.current
+            if (!g) return
+            g.director.devSkipBeat()
+            g.pushState()
+          }}
+          onClose={() => {
+            const g = gameRef.current
+            if (!g) return
+            g.devPanelOpen = false
+            g.setPaused(false)
+          }}
+        />
+        </React.Suspense>
       )}
     </div>
   )

@@ -71,6 +71,9 @@ export class Player {
       squash: this.squash,
       talking: this.talking,
       reaction: this.reaction,
+      // Level 2 hangs the pink earphones off the player from frame one —
+      // see Characters.js drawEarphonesHanging.
+      accessory: this.accessory ?? null,
     }
   }
 

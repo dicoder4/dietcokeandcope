@@ -129,6 +129,10 @@ const level1 = {
   id: 1,
   name: 'GET THIS MAN A SHAWARMA',
   location: 'MSRIT — GATE 11',
+  // LEGO is THIS level's mechanic, not a rule of the game. The offline
+  // checkers branch on this: 'build' levels must be unsolvable without
+  // bricks, 'story' levels are walked and scripted instead.
+  mechanic: 'build',
   objective: 'Find out why you are awake',
   hint: 'You cannot jump. You can build. Left-click to lay a brick across the gap.',
   // Center column of the gap, used only for the "WHAT ARE YOU BUILDING"
@@ -390,12 +394,12 @@ const level1 = {
     { t: 'complete' },
   ],
 
-  // Shown after the LevelComplete card, on the way out. Levels 2-4 aren't
-  // built yet, so this card holds indefinitely — it's the actual end of
-  // the playable adventure for now, not a timed transition.
+  // Shown after the LevelComplete card, on the way out. Level 2 exists now,
+  // so this card is a timed transition into the metro rather than the end of
+  // the line — no `hold`, which lets `storyDone` fire and App.jsx load on.
   outroBeats: [
     { t: 'say', who: 'anisha', text: 'Okay, let’s go.' },
-    { t: 'nextLocation', icon: '🎧', title: 'MUSIC DISTRICT', hold: true },
+    { t: 'nextLocation', icon: '🎧', title: 'MUSIC DISTRICT', dur: 3.4 },
   ],
 }
 

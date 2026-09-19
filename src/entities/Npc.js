@@ -117,6 +117,7 @@ export class Npc {
       squash: this.squash,
       talking: this.talking,
       reaction: this.reaction,
+      accessory: this.accessory ?? null,
     }
   }
 }

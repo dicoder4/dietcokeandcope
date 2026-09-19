@@ -39,6 +39,7 @@ export class Director {
     this.mission = null // { icon, title, text }
     this.banner = null // { lines, born }
     this.foodBuilder = null // { categoryIndex, categories, selections, reaction, done, ... }
+    this.songQuiz = null // { rounds, roundIndex, phase, picked, wasCorrect, score, reaction }
     this.skipCutscenes = false // headless simulation flag
     /**
      * Index of the last beat marked `checkpoint: true`. Dying rewinds the
@@ -63,6 +64,7 @@ export class Director {
     this.mission = null
     this.banner = null
     this.foodBuilder = null
+    this.songQuiz = null
     this.checkpointIndex = -1
     if (this.skipCutscenes) {
       // Headless mode: no story, just let the level be playable immediately.
@@ -114,6 +116,7 @@ export class Director {
     this.dialogue = null
     this.banner = null
     this.foodBuilder = null
+    this.songQuiz = null
     this.index = this.checkpointIndex - 1 // advance() pre-increments
     this.advance()
     return true
@@ -186,6 +189,55 @@ export class Director {
     this.game.dirty = true
   }
 
+  // ---- song-quiz progression --------------------------------------------
+  // Same contract as the food builder: the UI reports, the beat decides.
+
+  /** Answer the current round (index into the round's `choices`). */
+  pickSong(optionIndex) {
+    if (!this.songQuiz || this.songQuiz.phase !== 'answering') return
+    this.state.songPick = optionIndex
+    this.game.dirty = true
+  }
+
+  /** Play the clip again from the top. Only meaningful while it is playing. */
+  replaySong() {
+    if (!this.songQuiz || this.songQuiz.phase !== 'playing') return
+    this.state.songReplay = true
+    this.game.dirty = true
+  }
+
+  // ---- dev tools ---------------------------------------------------------
+
+  /**
+   * Force the current beat to finish and move on. Dev-only: this is how you
+   * fast-forward to the part of a level you are actually working on without
+   * replaying the cutscenes in front of it.
+   *
+   * `exit` still runs, so the beat cleans up after itself (dialogue closes,
+   * music stops, banners clear) exactly as it would have on a normal finish.
+   * Skipping is therefore safe mid-minigame.
+   */
+  devSkipBeat() {
+    if (this.done || !this.beat) return false
+    BEATS[this.beat.t]?.exit?.(this, this.beat, this.game)
+    this.advance()
+    return true
+  }
+
+  /**
+   * Run beats until the predicate matches, or the script ends. Used by the
+   * dev panel's "skip to" jumps. Capped so a bad predicate cannot hang.
+   */
+  devSkipUntil(pred, limit = 400) {
+    let n = 0
+    while (!this.done && this.beat && n < limit) {
+      if (pred(this.beat, this.index)) return true
+      this.devSkipBeat()
+      n++
+    }
+    return false
+  }
+
   snapshot() {
     return {
       dialogue: this.dialogue ? { ...this.dialogue } : null,
@@ -193,6 +245,7 @@ export class Director {
       mission: this.mission ? { ...this.mission } : null,
       banner: this.banner ? { ...this.banner } : null,
       foodBuilder: this.foodBuilder ? { ...this.foodBuilder } : null,
+      songQuiz: this.songQuiz ? { ...this.songQuiz } : null,
       controlEnabled: this.controlEnabled,
       buildAllowed: this.buildAllowed,
       storyDone: this.done,

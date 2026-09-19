@@ -28,6 +28,18 @@ const TERRAIN_ALT = {
 const PLATE_COLORS = { color: '#7a6a3a', colorDark: '#524727', colorTop: '#b09a52' }
 
 /**
+ * A level can override the ground palette — Level 2's metro floor is grey
+ * vinyl, not campus paving. `floor` sets the main tone and `floorAlt` the
+ * chequer; either may be omitted to keep the default.
+ */
+function floorPalettes(def) {
+  return {
+    main: def.floor ?? TERRAIN,
+    alt: def.floorAlt ?? def.floor ?? TERRAIN_ALT,
+  }
+}
+
+/**
  * ctx.roundRect is well supported in current browsers, but a missing method
  * inside the render loop would throw every frame and take the whole game down.
  * A three-line fallback is cheaper than that risk.
@@ -184,6 +196,73 @@ function drawThinPlate(ctx, x, y, pal) {
   ctx.strokeStyle = 'rgba(0,0,0,0.25)'
   ctx.lineWidth = 1
   ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * A continuous floor slab — the interior alternative to studded bricks.
+ *
+ * Level 1's ground IS LEGO, so drawing it brick-by-brick with studs is
+ * correct there. A metro carriage is not built out of LEGO, so an interior
+ * level draws its deck as one unbroken vinyl surface instead: a single top
+ * face per horizontal run, no studs, no per-cell seams, and a scuffed
+ * gradient so it still reads as dimensional under the same lighting.
+ *
+ * `run` is the number of cells this slab spans horizontally, which lets the
+ * caller coalesce a whole row into one path and keep the surface seamless.
+ */
+function drawFloorSlab(ctx, x, y, run, pal, opts = {}) {
+  const { top = true } = opts
+  const p = Camera.project(x, y)
+  const w = run * TILE_W
+  const sk = TILE_H * SKEW
+
+  ctx.save()
+
+  // ---- front face: the riser you see below the walking surface ----
+  ctx.beginPath()
+  ctx.moveTo(p.x, p.y)
+  ctx.lineTo(p.x + w, p.y)
+  ctx.lineTo(p.x + w + sk, p.y + TILE_H)
+  ctx.lineTo(p.x + sk, p.y + TILE_H)
+  ctx.closePath()
+  const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + TILE_H)
+  grad.addColorStop(0, pal.color)
+  grad.addColorStop(1, shade(pal.color, -14))
+  ctx.fillStyle = grad
+  ctx.fill()
+
+  // ---- top face: the vinyl the passengers actually stand on ----
+  if (top) {
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    ctx.lineTo(p.x + w, p.y)
+    ctx.lineTo(p.x + w + DEPTH * 0.9, p.y - DEPTH)
+    ctx.lineTo(p.x + DEPTH * 0.9, p.y - DEPTH)
+    ctx.closePath()
+    ctx.fillStyle = pal.colorTop
+    ctx.fill()
+
+    // a long anti-slip groove running the length of the carriage, which is
+    // what sells "train floor" rather than "grey rectangle"
+    ctx.strokeStyle = 'rgba(0,0,0,0.13)'
+    ctx.lineWidth = 1
+    for (const t of [0.34, 0.66]) {
+      ctx.beginPath()
+      ctx.moveTo(p.x + DEPTH * 0.9 * t, p.y - DEPTH * t)
+      ctx.lineTo(p.x + w + DEPTH * 0.9 * t, p.y - DEPTH * t)
+      ctx.stroke()
+    }
+
+    // the nose-edge highlight where the floor meets the drop
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)'
+    ctx.lineWidth = 1.4
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    ctx.lineTo(p.x + w, p.y)
+    ctx.stroke()
+  }
+
   ctx.restore()
 }
 
@@ -396,9 +475,245 @@ function drawProp(ctx, prop, now) {
       break
     }
 
+    // ================================================================
+    //  BENGALURU METRO — Level 2's carriage interior
+    // ================================================================
+
+    case 'metroWindow': {
+      // The window is where the level sells "this train is moving": layered
+      // silhouettes of the city slide past at different speeds, so the
+      // parallax alone reads as motion even when nothing else changes.
+      const ww = TILE_W * 2.6
+      const wh = TILE_H * 1.9
+      const wx = baseX - ww / 2
+      const wy = baseY - TILE_H * 3.4
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.roundRect(wx, wy, ww, wh, 10)
+      ctx.clip()
+
+      // daylight outside
+      const outside = ctx.createLinearGradient(wx, wy, wx, wy + wh)
+      outside.addColorStop(0, '#8fc4e8')
+      outside.addColorStop(1, '#dfe9ee')
+      ctx.fillStyle = outside
+      ctx.fillRect(wx, wy, ww, wh)
+
+      // far skyline — slow
+      const far = (now * 38 + x * 60) % (ww + 140)
+      ctx.fillStyle = 'rgba(110,140,170,0.55)'
+      for (let i = -1; i < 5; i++) {
+        const bx = wx + ((i * 46 - far) % (ww + 140)) + 70
+        ctx.fillRect(bx, wy + wh * 0.32, 26, wh * 0.68)
+        ctx.fillRect(bx + 30, wy + wh * 0.46, 16, wh * 0.54)
+      }
+      // near trees/poles — fast, which is what makes it feel like a train
+      const near = (now * 165 + x * 90) % (ww + 120)
+      ctx.fillStyle = 'rgba(52,96,72,0.75)'
+      for (let i = -1; i < 6; i++) {
+        const tx = wx + ((i * 58 - near) % (ww + 120)) + 60
+        ctx.beginPath()
+        ctx.arc(tx, wy + wh * 0.72, 13, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillRect(tx - 2, wy + wh * 0.72, 4, wh * 0.28)
+      }
+      ctx.restore()
+
+      // frame + glass sheen
+      ctx.strokeStyle = '#8a94a6'
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      ctx.roundRect(wx, wy, ww, wh, 10)
+      ctx.stroke()
+      ctx.save()
+      ctx.globalAlpha = 0.18
+      ctx.fillStyle = '#ffffff'
+      ctx.beginPath()
+      ctx.moveTo(wx + ww * 0.1, wy + wh)
+      ctx.lineTo(wx + ww * 0.42, wy)
+      ctx.lineTo(wx + ww * 0.6, wy)
+      ctx.lineTo(wx + ww * 0.28, wy + wh)
+      ctx.closePath()
+      ctx.fill()
+      ctx.restore()
+      break
+    }
+
+    case 'metroSeat': {
+      const sw = TILE_W * 2.2
+      const sy = baseY - TILE_H * 0.55
+      // the blue bench cushion
+      ctx.fillStyle = '#2f6fa8'
+      ctx.beginPath()
+      ctx.roundRect(baseX - sw / 2, sy - 16, sw, 16, 5)
+      ctx.fill()
+      // backrest
+      ctx.fillStyle = '#3d86c4'
+      ctx.beginPath()
+      ctx.roundRect(baseX - sw / 2, sy - TILE_H * 1.25, sw, TILE_H * 0.85, 6)
+      ctx.fill()
+      // stainless legs
+      ctx.fillStyle = '#9aa7b6'
+      ctx.fillRect(baseX - sw / 2 + 4, sy, 5, 18)
+      ctx.fillRect(baseX + sw / 2 - 9, sy, 5, 18)
+      break
+    }
+
+    case 'metroPole': {
+      const ph = TILE_H * 3.5
+      const grad = ctx.createLinearGradient(baseX - 4, 0, baseX + 4, 0)
+      grad.addColorStop(0, '#8e9aa8')
+      grad.addColorStop(0.45, '#e3eaf1')
+      grad.addColorStop(1, '#7c8794')
+      ctx.fillStyle = grad
+      ctx.fillRect(baseX - 4, baseY - ph, 8, ph)
+      // hanging handle, swaying with the train
+      const swing = Math.sin(now * 1.6 + x) * 6
+      ctx.strokeStyle = '#c3ccd6'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(baseX, baseY - ph + 8)
+      ctx.lineTo(baseX + swing, baseY - ph + 34)
+      ctx.stroke()
+      ctx.strokeStyle = '#d8dee6'
+      ctx.lineWidth = 3.5
+      ctx.beginPath()
+      ctx.ellipse(baseX + swing * 1.15, baseY - ph + 44, 8, 11, swing * 0.02, 0, Math.PI * 2)
+      ctx.stroke()
+      break
+    }
+
+    case 'metroDoor': {
+      const dw = TILE_W * 2.4
+      const dh = TILE_H * 3.4
+      const dx = baseX - dw / 2
+      const dy = baseY - dh
+      ctx.fillStyle = '#c6cfd9'
+      ctx.fillRect(dx, dy, dw, dh)
+      // the glass panel
+      ctx.fillStyle = 'rgba(150,190,215,0.55)'
+      ctx.fillRect(dx + 8, dy + 14, dw - 16, dh * 0.5)
+      // the yellow safety strip every metro door has
+      ctx.fillStyle = '#f2b230'
+      ctx.fillRect(dx, dy + dh - 16, dw, 6)
+      // centre seam
+      ctx.strokeStyle = '#96a1ae'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(baseX, dy)
+      ctx.lineTo(baseX, dy + dh)
+      ctx.stroke()
+      break
+    }
+
+    case 'metroSign': {
+      // The route strip above the door — BMRCL purple line.
+      const sw = TILE_W * 3.6
+      const sy = baseY - TILE_H * 3.9
+      ctx.fillStyle = '#1d2330'
+      ctx.beginPath()
+      ctx.roundRect(baseX - sw / 2, sy, sw, 26, 5)
+      ctx.fill()
+      ctx.fillStyle = '#9b6fd4'
+      ctx.fillRect(baseX - sw / 2 + 6, sy + 18, sw - 12, 4)
+      ctx.fillStyle = '#eef4fb'
+      ctx.font = 'bold 11px "Trebuchet MS", system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(prop.label ?? 'NEXT: MG ROAD', baseX, sy + 14)
+      break
+    }
+
+    case 'passenger': {
+      // Background commuters. Deliberately faceless silhouettes — they are
+      // scenery, not cast. In music mode they bob to the beat.
+      const bobbing = prop.bob ?? 0
+      const lift = bobbing ? Math.abs(Math.sin(now * 5.2 + x)) * 5 * bobbing : 0
+      const ph = TILE_H * 1.4
+      ctx.save()
+      ctx.globalAlpha = 0.55
+      ctx.fillStyle = prop.color ?? '#3c4759'
+      // body
+      ctx.beginPath()
+      ctx.roundRect(baseX - 11, baseY - ph - lift, 22, ph * 0.72, 5)
+      ctx.fill()
+      // head
+      ctx.beginPath()
+      ctx.arc(baseX, baseY - ph - lift - 10, 9, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.restore()
+      break
+    }
+
     default:
       break
   }
+  ctx.restore()
+}
+
+/**
+ * The carriage ceiling light — the interior stand-in for sky. One warm strip
+ * across the top of the screen, which starts pulsing in time once the
+ * earphones go in.
+ */
+function drawCeilingStrip(ctx, w, h, now, music) {
+  ctx.save()
+  const pulse = music ? 0.62 + Math.sin(now * 6.5) * 0.28 : 0.4
+  const stripH = h * 0.1
+  const g = ctx.createLinearGradient(0, 0, 0, stripH * 2.4)
+  g.addColorStop(0, music ? `rgba(255,190,240,${pulse})` : `rgba(210,228,245,${pulse})`)
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, stripH * 2.4)
+
+  // the housing itself
+  ctx.fillStyle = music ? 'rgba(255,220,250,0.85)' : 'rgba(228,238,248,0.8)'
+  ctx.fillRect(0, stripH * 0.35, w, 6)
+  ctx.restore()
+}
+
+/**
+ * MUSIC MODE. Everything here is additive over the finished frame: a warm
+ * colour wash, a bar visualiser along the bottom, and drifting notes. It is
+ * drawn in screen space (outside the camera transform) so it stays put while
+ * the carriage rocks underneath it.
+ */
+function drawMusicOverlay(ctx, w, h, now) {
+  ctx.save()
+
+  // warm wash — the world literally gets more colourful
+  const wash = ctx.createLinearGradient(0, 0, w, h)
+  wash.addColorStop(0, 'rgba(255,95,162,0.13)')
+  wash.addColorStop(0.5, 'rgba(255,214,102,0.07)')
+  wash.addColorStop(1, 'rgba(120,140,255,0.13)')
+  ctx.fillStyle = wash
+  ctx.fillRect(0, 0, w, h)
+
+  // the visualiser along the floor edge
+  const bars = 48
+  const bw = w / bars
+  for (let i = 0; i < bars; i++) {
+    const amp =
+      Math.abs(Math.sin(now * 5.5 + i * 0.5)) * 0.6 +
+      Math.abs(Math.sin(now * 8.2 + i * 1.3)) * 0.4
+    const bh = 14 + amp * 54
+    const hue = (i * 7 + now * 60) % 360
+    ctx.fillStyle = `hsla(${hue}, 85%, 64%, 0.5)`
+    ctx.fillRect(i * bw + 1, h - bh, bw - 2, bh)
+  }
+
+  // notes drifting up the sides
+  ctx.font = '18px system-ui, "Segoe UI Emoji", sans-serif'
+  ctx.textAlign = 'center'
+  for (let i = 0; i < 10; i++) {
+    const t = (now * 0.32 + i * 0.1) % 1
+    const nx = ((i * 137) % w)
+    const ny = h - t * h
+    ctx.globalAlpha = Math.sin(t * Math.PI) * 0.55
+    ctx.fillStyle = i % 2 ? '#ff5fa2' : '#ffd166'
+    ctx.fillText(i % 3 === 0 ? '♫' : '♪', nx + Math.sin(now * 2 + i) * 18, ny)
+  }
+
   ctx.restore()
 }
 
@@ -439,34 +754,57 @@ export function render(ctx, world, view, state) {
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, w, h)
 
-  // parallax clouds — a slow drift that sells daylight and depth
-  ctx.save()
-  ctx.globalAlpha = 0.5
-  ctx.fillStyle = '#ffffff'
-  const off = -world.camera.x * 0.06 + now * 5
-  for (let i = -1; i < 10; i++) {
-    const bx = (((i * 260 + off) % (w + 520)) + w + 520) % (w + 520) - 260
-    const by = 40 + ((i * 97) % 140)
-    for (const [dx, dy, r] of [
-      [0, 0, 26],
-      [30, 6, 20],
-      [-28, 8, 17],
-      [12, -12, 18],
-    ]) {
-      ctx.beginPath()
-      ctx.arc(bx + dx, by + dy, r, 0, Math.PI * 2)
-      ctx.fill()
+  const interior = world.def.interior === true
+  const music = world.musicMode === true
+
+  if (!interior) {
+    // parallax clouds — a slow drift that sells daylight and depth
+    ctx.save()
+    ctx.globalAlpha = 0.5
+    ctx.fillStyle = '#ffffff'
+    const off = -world.camera.x * 0.06 + now * 5
+    for (let i = -1; i < 10; i++) {
+      const bx = (((i * 260 + off) % (w + 520)) + w + 520) % (w + 520) - 260
+      const by = 40 + ((i * 97) % 140)
+      for (const [dx, dy, r] of [
+        [0, 0, 26],
+        [30, 6, 20],
+        [-28, 8, 17],
+        [12, -12, 18],
+      ]) {
+        ctx.beginPath()
+        ctx.arc(bx + dx, by + dy, r, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
+    ctx.restore()
+  } else {
+    // Indoors there is no sky to look at, so the ceiling does the work: a
+    // lit strip running the length of the carriage, which is also the
+    // easiest thing to make pulse once the music starts.
+    drawCeilingStrip(ctx, w, h, now, music)
   }
-  ctx.restore()
 
   ctx.save()
+  // The carriage is always moving. A gentle vertical rock plus an occasional
+  // lateral judder, applied before the camera transform so the whole scene
+  // — floor, props, characters — rides together instead of sliding apart.
+  if (interior) {
+    const beat = music ? 1.9 : 1
+    const rock = Math.sin(now * 3.1) * 1.3 * beat
+    const judder = Math.sin(now * 0.7) * Math.sin(now * 11.3) * 0.9
+    ctx.translate(judder, rock)
+  }
   world.camera.apply(ctx)
 
   const g = world.grid
 
   // ---- scenery, behind everything playable ----
-  for (const prop of world.props ?? []) drawProp(ctx, prop, now)
+  // Passengers get told about the music so they can move to it; every other
+  // prop ignores the flag.
+  for (const prop of world.props ?? []) {
+    drawProp(ctx, prop.type === 'passenger' && music ? { ...prop, bob: 1 } : prop, now)
+  }
 
   drawBuildGrid(ctx, world, state.buildMode)
 
@@ -496,15 +834,35 @@ export function render(ctx, world, view, state) {
   }
 
   // ---- terrain, drawn back-to-front (top rows first) ----
+  const ground = floorPalettes(world.def)
   for (let y = 0; y < g.height; y++) {
+    if (interior) {
+      // A carriage floor is a surface, not a pile of bricks. Coalesce each
+      // horizontal run of terrain into a single slab so no studs or cell
+      // seams appear — see drawFloorSlab.
+      let x = 0
+      while (x < g.width) {
+        if (g.get(x, y) !== CELL.TERRAIN) {
+          x++
+          continue
+        }
+        let run = 0
+        while (x + run < g.width && g.get(x + run, y) === CELL.TERRAIN) run++
+        // Only the topmost deck row gets a walking surface; the rows beneath
+        // are the underframe and just need their front face.
+        drawFloorSlab(ctx, x, y, run, ground.main, { top: !g.isSolid(x, y - 1) })
+        x += run
+      }
+      continue
+    }
     for (let x = 0; x < g.width; x++) {
       const k = g.get(x, y)
       if (k === CELL.TERRAIN) {
         const v = g.variant[g.idx(x, y)]
         if (v === 99) {
-          drawThinPlate(ctx, x, y, TERRAIN_ALT)
+          drawThinPlate(ctx, x, y, ground.alt)
         } else {
-          const pal = v % 2 === 0 ? TERRAIN : TERRAIN_ALT
+          const pal = v % 2 === 0 ? ground.main : ground.alt
           // only draw studs if nothing sits directly on top (cleaner look)
           const covered = g.isSolid(x, y - 1)
           drawBrick(ctx, x, y, 1, 1, pal, { studs: !covered })
@@ -696,5 +1054,9 @@ export function render(ctx, world, view, state) {
   }
 
   ctx.restore() // camera
+
+  // ---- music mode, painted over the finished frame ----
+  if (music) drawMusicOverlay(ctx, w, h, now)
+
   ctx.restore()
 }

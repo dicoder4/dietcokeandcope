@@ -16,7 +16,7 @@ import { Director } from './Director.js'
 import { Stats } from './Stats.js'
 import { preloadFaces, characterOf } from './Characters.js'
 import { BLOCK_TYPES } from '../entities/Block.js'
-import { sfx, resumeAudio } from './Sound.js'
+import { sfx, resumeAudio, stopAllAudio } from './Sound.js'
 import gameConfig from '../config/gameConfig.js'
 import {
   DEATH_QUIPS,
@@ -31,12 +31,13 @@ import {
 } from '../config/quips.js'
 
 import level1 from '../levels/level1.js'
+import level2 from '../levels/level2.js'
 
-export const LEVELS = [level1]
+export const LEVELS = [level1, level2]
 
 /**
  * The adventure is four worlds (MSRIT shawarma quest, metro headphones, gym
- * PC build, the bear kitchen), only the first of which is built so far.
+ * PC build, the bear kitchen), the first two of which are built so far.
  * `isFinal` below is deliberately NOT `levelIndex === LEVELS.length - 1` —
  * that would make Level 1 "final" (and route into the birthday-cake Ending
  * screen) just because it's the only one that exists yet. TOTAL_LEVELS is
@@ -79,6 +80,7 @@ export class Game {
     this.deathQuip = null
     this.rafId = null
     this.dirty = true
+    this.devPanelOpen = false
 
     preloadFaces()
 
@@ -89,6 +91,7 @@ export class Game {
 
   destroy() {
     this.running = false
+    stopAllAudio()
     if (this.rafId) cancelAnimationFrame(this.rafId)
     clearTimeout(this._bridgeFailBannerT)
     this.input.detach()
@@ -107,6 +110,9 @@ export class Game {
   }
 
   loadLevel(i) {
+    // Ambience and music are per-level and long-running; nothing else stops
+    // them, so a level change has to.
+    stopAllAudio()
     this.levelIndex = Math.max(0, Math.min(LEVELS.length - 1, i))
     const def = LEVELS[this.levelIndex]
     this.world = new World(def, this.view.w, this.view.h)
@@ -190,11 +196,32 @@ export class Game {
     this.dirty = true
   }
 
+  /**
+   * Service dev keys while the game is paused, putting every other edge back
+   * so the normal handler still sees it — otherwise draining here would eat
+   * the Escape that unpauses. No-op unless DevTools has been attached, which
+   * only happens in a dev build.
+   */
+  handleDevEdges() {
+    if (!this.handleDevEdge) return
+    const keep = []
+    for (const e of this.input.drainEdges()) {
+      if (!this.handleDevEdge(e)) keep.push(e)
+    }
+    if (keep.length) this.input.edges.unshift(...keep)
+  }
+
   // ---------------------------------------------------------------- input
   handleEdges() {
     const b = this.world.building
     const d = this.director
     for (const e of this.input.drainEdges()) {
+      // Dev tools go FIRST, before the dialogue and minigame branches below
+      // swallow every key they don't recognise — mid-cutscene is exactly
+      // when you want to skip. `handleDevEdge` only exists when DevTools.js
+      // has been attached, which never happens in a production build.
+      if (this.handleDevEdge?.(e)) continue
+
       // Dialogue owns the keyboard while it is open: Enter/Space steps a
       // line, 1-4 pick an option. Everything else is swallowed so the player
       // cannot place bricks mid-conversation.
@@ -214,6 +241,30 @@ export class Game {
           if (i < d.dialogue.options.length) {
             d.choose(i)
             sfx.select()
+            this.pushState()
+          }
+        }
+        continue
+      }
+
+      // The song quiz owns the keyboard the same way: 1-4 answer the round,
+      // Enter/Space replays the clip. Nothing else gets through.
+      if (d.songQuiz) {
+        if (e === 'pause') {
+          this.setPaused(!this.paused)
+          continue
+        }
+        if (e === 'confirm' || e === 'place') {
+          d.replaySong()
+          this.pushState()
+          continue
+        }
+        const pick = /^slot(\d)$/.exec(e)
+        if (pick) {
+          const i = Number(pick[1]) - 1
+          const round = d.songQuiz.rounds[d.songQuiz.roundIndex]
+          if (round && i < round.choices.length) {
+            d.pickSong(i)
             this.pushState()
           }
         }
@@ -358,6 +409,10 @@ export class Game {
 
   // ---------------------------------------------------------------- tick
   tick(dt) {
+    // The dev panel pauses the game, which stops handleEdges() below from
+    // ever running — so its own keys have to be serviced before the pause
+    // check, or the panel could be opened and never closed from the keyboard.
+    if (this.paused && this.world) this.handleDevEdges()
     if (this.paused || !this.world) return
     const w = this.world
     const p = w.player
@@ -560,6 +615,14 @@ export class Game {
       counters: { ...this.counters },
       stats: this.stats.snapshot(),
       location: def.location ?? null,
+      // dev-only. `devEnabled` is set by DevTools.attachDevTools, which is
+      // never imported in a production build — so these stay false/empty and
+      // the panel never renders there.
+      dev: this.devEnabled === true,
+      devPanelOpen: this.devPanelOpen === true,
+      devBeatIndex: this.director.index,
+      devBeatType: this.director.beat?.t ?? null,
+      devMissions: this.devMissionList?.() ?? [],
       playerName: gameConfig.playerName,
       plates: w.plates.map((p) => ({ x: p.x, y: p.y, pressed: p.pressed, label: p.label })),
       goals: w.goals.map((g) => ({ label: g.label, emoji: g.emoji, reached: g.reached })),

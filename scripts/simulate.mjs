@@ -83,7 +83,13 @@ const say = (s) => console.log(s)
 
 for (const def of LEVELS) {
   say('─'.repeat(64))
-  say('LEVEL ' + def.id + ' — ' + def.name)
+  const mechanic = def.mechanic ?? 'build'
+  say('LEVEL ' + def.id + ' — ' + def.name + '   [' + mechanic + ']')
+
+  // Story levels have no bricks, so the build passes below are skipped. The
+  // walk pass still runs: whatever the script asks the player to reach, the
+  // real Player must be able to physically get to.
+  const isStory = mechanic === 'story'
 
   const world = new World(def, 1280, 720)
   let now = 0
@@ -97,31 +103,35 @@ for (const def of LEVELS) {
   for (const g of world.goals) g.hidden = false
 
   // --- 1. the real BuildingSystem must accept the reference build ---------
-  let placeErrors = 0
-  for (const spec of def.reference ?? []) {
-    const res = placeReference(world, spec, now)
-    if (!res.ok) {
-      say(
-        '     ✗ BuildingSystem rejected ' +
-          spec.type + '@' + spec.x + ',' + spec.y + ': ' + res.reason
-      )
-      placeErrors++
+  if (!isStory) {
+    let placeErrors = 0
+    for (const spec of def.reference ?? []) {
+      const res = placeReference(world, spec, now)
+      if (!res.ok) {
+        say(
+          '     ✗ BuildingSystem rejected ' +
+            spec.type + '@' + spec.x + ',' + spec.y + ': ' + res.reason
+        )
+        placeErrors++
+      }
     }
-  }
-  if (placeErrors === 0) {
-    say('     ✓ all ' + (def.reference?.length ?? 0) + ' reference bricks accepted by the real rules')
-  }
-  failures += placeErrors
+    if (placeErrors === 0) {
+      say('     ✓ all ' + (def.reference?.length ?? 0) + ' reference bricks accepted by the real rules')
+    }
+    failures += placeErrors
 
-  // --- 2. plates must have opened their gates -----------------------------
-  world.onStructureChanged()
-  for (const [gid, gate] of world.gates) {
-    if (!gate.open) {
-      say('     ✗ gate "' + gid + '" still closed after the reference build')
-      failures++
-    } else {
-      say('     ✓ gate "' + gid + '" opened by the brick resting on the plate')
+    // --- 2. plates must have opened their gates ---------------------------
+    world.onStructureChanged()
+    for (const [gid, gate] of world.gates) {
+      if (!gate.open) {
+        say('     ✗ gate "' + gid + '" still closed after the reference build')
+        failures++
+      } else {
+        say('     ✓ gate "' + gid + '" opened by the brick resting on the plate')
+      }
     }
+  } else {
+    say('     · no bricks in this level — skipping the build passes')
   }
 
   // --- 3. walk the real Player to the goal --------------------------------
@@ -132,6 +142,11 @@ for (const def of LEVELS) {
   world.hazards = []
 
   const goal = world.goals[0]
+  if (!goal) {
+    say('     · no goals to walk to')
+    world.hazards = savedHazards
+    continue
+  }
   const input = makeInput()
   let best = Infinity
   let stuckFor = 0

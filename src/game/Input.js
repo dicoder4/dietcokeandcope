@@ -73,6 +73,20 @@ export class Input {
         case 'KeyH':
           this.edges.push('hint')
           break
+        // ---- dev tools ----
+        // Bare `import.meta.env.DEV` so Vite folds this to `false` and drops
+        // the whole block from the production bundle. These are ordinary
+        // keys a player might well press; queueing dead edges for them in
+        // the shipped game would be sloppy.
+        case 'Backquote':
+        case 'Period':
+        case 'KeyN':
+          if (import.meta.env.DEV) {
+            this.edges.push(
+              { Backquote: 'devPanel', Period: 'devSkipBeat', KeyN: 'devSkipLevel' }[e.code]
+            )
+          }
+          break
         case 'Digit1':
         case 'Digit2':
         case 'Digit3':

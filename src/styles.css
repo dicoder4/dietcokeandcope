@@ -1570,3 +1570,339 @@ button {
   font-style: italic;
   margin-top: 2px;
 }
+
+/* ============================================================
+   SONG QUIZ — Level 2's "GUESS THE SONG" minigame
+   Deliberately sized and layered like .fb-* above: same overlay
+   treatment, same panel, so the two minigames read as one game.
+   ============================================================ */
+
+.sq-root {
+  position: absolute;
+  inset: 0;
+  z-index: 42;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 6, 14, 0.86);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.2s;
+  padding: 24px;
+}
+
+.sq-panel {
+  width: min(640px, 94vw);
+  background: var(--panel);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--panel-edge);
+  padding: 22px 26px 26px;
+  animation: dlgIn 0.28s cubic-bezier(0.2, 1.2, 0.4, 1);
+  transition: box-shadow 0.25s ease;
+}
+
+.sq-panel-good {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(79, 194, 106, 0.6),
+    0 0 40px rgba(79, 194, 106, 0.25);
+}
+
+.sq-panel-bad {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(226, 69, 60, 0.6),
+    0 0 40px rgba(226, 69, 60, 0.2);
+}
+
+.sq-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.sq-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.sq-dot.on {
+  background: var(--gold);
+  transform: scale(1.25);
+  box-shadow: 0 0 8px var(--gold);
+}
+
+.sq-dot.done {
+  background: var(--good);
+}
+
+.sq-round {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+
+.sq-head {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.sq-title {
+  font-size: clamp(18px, 2.6vw, 24px);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+
+.sq-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.sq-verdict {
+  font-size: clamp(26px, 5vw, 40px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  animation: popIn 0.32s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.sq-verdict.good {
+  color: var(--good);
+  text-shadow: 0 0 22px rgba(79, 194, 106, 0.55);
+}
+
+.sq-verdict.bad {
+  color: var(--bad);
+  text-shadow: 0 0 22px rgba(226, 69, 60, 0.45);
+}
+
+.sq-xp {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brick-yellow);
+  animation: floatUp 0.5s ease-out;
+}
+
+/* ---- the equaliser ---- */
+
+.sq-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  height: 92px;
+  margin: 10px 0 18px;
+}
+
+.sq-bar {
+  width: 10px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, var(--brick-yellow), var(--brick-red));
+  animation: sqBounce 0.62s ease-in-out infinite alternate;
+}
+
+@keyframes sqBounce {
+  from {
+    height: 12%;
+    opacity: 0.55;
+  }
+  to {
+    height: 100%;
+    opacity: 1;
+  }
+}
+
+/* People who don't want motion still get a readable panel. */
+@media (prefers-reduced-motion: reduce) {
+  .sq-bar {
+    animation: none;
+    height: 55%;
+  }
+}
+
+/* ---- the four answers ---- */
+
+.sq-choices {
+  display: grid;
+  gap: 10px;
+}
+
+.sq-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 0;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--panel-edge);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, transform 0.14s ease;
+  animation: fadeUp 0.26s backwards;
+}
+
+.sq-choice:hover,
+.sq-choice:focus-visible {
+  background: rgba(255, 214, 102, 0.16);
+  transform: translateX(4px);
+  outline: none;
+}
+
+.sq-letter {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sq-choice-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.sq-key {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+/* ---- Diya's running commentary ---- */
+
+.sq-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  justify-content: center;
+  min-height: 34px;
+  margin-top: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  animation: fadeUp 0.24s;
+}
+
+.sq-line-empty {
+  animation: none;
+}
+
+.sq-line-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+
+.sq-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 460px) {
+  .sq-panel {
+    padding: 16px 16px 20px;
+  }
+  .sq-bars {
+    height: 68px;
+  }
+  .sq-choice {
+    font-size: 13px;
+    padding: 11px;
+  }
+}
+
+/* ============================================================
+   DEV PANEL — dev builds only, never shipped
+   Deliberately plain and slightly ugly: it should never be
+   mistaken for part of the game.
+   ============================================================ */
+
+.dev-overlay {
+  z-index: 60;
+}
+
+.dev-card {
+  width: min(680px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: left;
+  border: 1px dashed rgba(255, 214, 102, 0.5);
+}
+
+.dev-title {
+  font-family: var(--mono);
+  font-size: 18px !important;
+  letter-spacing: 0.16em;
+  color: var(--brick-yellow);
+}
+
+.dev-note {
+  font-size: 11px;
+  font-style: italic;
+  margin-top: -6px;
+}
+
+.dev-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dev-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  margin-bottom: 9px;
+}
+
+.dev-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dev-missions .brick-btn {
+  font-size: 11px;
+}
+
+.dev-hint {
+  font-size: 11px;
+  margin-top: 9px;
+  line-height: 1.5;
+}
+
+.dev-beat {
+  font-size: 12px;
+  color: var(--brick-yellow);
+  margin: 0 0 9px;
+}
+
+.dev-keys {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+}

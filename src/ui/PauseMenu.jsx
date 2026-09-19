@@ -40,6 +40,12 @@ export default function PauseMenu({ state, onResume, onRestart, onMenu }) {
         )}
         <p style={{ fontSize: 12, fontStyle: 'italic' }}>{tip}</p>
 
+        {state.dev && (
+          <p className="dim" style={{ fontSize: 11 }}>
+            DEV: <kbd>`</kbd> tools · <kbd>N</kbd> next level · <kbd>.</kbd> skip beat
+          </p>
+        )}
+
         <div className="row">
           <button className="brick-btn green" onClick={onResume}>
             RESUME
