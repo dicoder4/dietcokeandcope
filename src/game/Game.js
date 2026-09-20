@@ -33,19 +33,27 @@ import {
 import level1 from '../levels/level1.js'
 import level2 from '../levels/level2.js'
 import level3 from '../levels/level3.js'
+import level4 from '../levels/level4.js'
 
-export const LEVELS = [level1, level2, level3]
+export const LEVELS = [level1, level2, level3, level4]
 
 /**
- * The adventure is four worlds (MSRIT shawarma quest, metro headphones, gym
- * PC build, the bear kitchen), the first three of which are built so far.
+ * The adventure runs to a birthday finale (MSRIT shawarma quest, metro
+ * headphones, gym PC build, the bear kitchen, and then the cake). The first
+ * four worlds are built so far.
+ *
  * `isFinal` below is deliberately NOT `levelIndex === LEVELS.length - 1` —
  * that would make Level 1 "final" (and route into the birthday-cake Ending
  * screen) just because it's the only one that exists yet. TOTAL_LEVELS is
- * the real target; bump it only when a level is actually finished, and it
- * stays in sync with LEVELS.length once all four are built.
+ * the real target; bump it only when a level is actually finished.
+ *
+ * It sits one ABOVE LEVELS.length on purpose right now: the kitchen is the
+ * newest level and ends on a held "NEXT LOCATION" card rather than dropping
+ * straight into the Ending. Ending.jsx is built and waiting — when the
+ * birthday finale is wired up as the last step, drop this back to match
+ * LEVELS.length and swap level4's outro `hold: true` for a `dur`.
  */
-export const TOTAL_LEVELS = 4
+export const TOTAL_LEVELS = 5
 
 const RESPAWN_DELAY = 0.85 // seconds — fast retry, per the "failure is fun" rule
 
@@ -297,6 +305,36 @@ export class Game {
             this.pushState()
           } else if (fb.kind === 'dunphy' && fb.phase === 'fps' && i < fb.puzzle.fpsOptions.length) {
             d.pickFrameRate(fb.puzzle.fpsOptions[i])
+            this.pushState()
+          }
+        }
+        continue
+      }
+
+      // The kitchen owns the keyboard too: 1-4 pick a dish, 1-6 drop the
+      // next layers off the tray, Enter backs out of an "are you sure?".
+      // Deliberately forgiving — nothing you can press here loses the level.
+      if (d.kitchen) {
+        if (e === 'pause') {
+          this.setPaused(!this.paused)
+          continue
+        }
+        const k = d.kitchen
+        if (k.confirmText) {
+          if (e === 'confirm' || e === 'place') {
+            d.confirmDish(false)
+            this.pushState()
+          }
+          continue
+        }
+        const pick = /^slot(\d)$/.exec(e)
+        if (pick) {
+          const i = Number(pick[1]) - 1
+          if (k.phase === 'dish' && i < k.dishes.length) {
+            d.pickDish(k.dishes[i].id)
+            this.pushState()
+          } else if (k.phase === 'jigsaw' && i < k.order.length) {
+            d.pickPiece(i)
             this.pushState()
           }
         }

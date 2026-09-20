@@ -385,9 +385,11 @@ const level3 = {
     { t: 'say', who: 'player', text: 'You coming to that one too?', auto: true, dur: 2.2 },
     { t: 'say', who: 'lord', text: 'Obviously.', auto: true, dur: 1.8 },
     { t: 'gymAmbience', on: false },
-    // Level 4 does not exist yet, so this card holds — the same convention
-    // Levels 1 and 2 used before the level after them was built.
-    { t: 'nextLocation', icon: '🍳', title: 'THE BEAR KITCHEN', hold: true },
+    // Level 4 exists now, so this card is a TIMED transition rather than a
+    // hold: without a `dur` the beat never completes, `storyDone` never
+    // fires, and App.jsx never loads the kitchen. Same change Levels 1 and 2
+    // each made the moment the level after them was built.
+    { t: 'nextLocation', icon: '🍳', title: 'THE BEAR KITCHEN', dur: 3.4 },
   ],
 }
 

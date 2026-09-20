@@ -200,6 +200,28 @@ function drawThinPlate(ctx, x, y, pal) {
 }
 
 /**
+ * Lazy image cache, same shape as Characters.ensureFace: ask for a URL, get
+ * back an image once it has loaded or null until then. Failures are
+ * memoised as 'missing' so a absent file is never re-requested every frame.
+ *
+ * The game ships exactly one image (the biryani — see public/food/README),
+ * and anything drawn through here must degrade gracefully without it.
+ */
+const imageCache = new Map()
+
+function ensureImage(url) {
+  if (!url || typeof Image === 'undefined') return null
+  const hit = imageCache.get(url)
+  if (hit === 'missing') return null
+  if (hit) return hit.complete && hit.naturalWidth ? hit : null
+  const img = new Image()
+  img.onerror = () => imageCache.set(url, 'missing')
+  img.src = url
+  imageCache.set(url, img)
+  return null
+}
+
+/**
  * A continuous floor slab — the interior alternative to studded bricks.
  *
  * Level 1's ground IS LEGO, so drawing it brick-by-brick with studs is
@@ -992,8 +1014,267 @@ function drawProp(ctx, prop, now, rig = false) {
       break
     }
 
+    // ---- LEVEL 4: THE BEAR KITCHEN ------------------------------------
+
+    case 'steelCounter': {
+      // The workhorse of the room. A steel top on open legs, with whatever
+      // is stacked underneath showing through.
+      const cw = TILE_W * (prop.w ?? 2)
+      const ch = TILE_H * 1.15
+      const topY = baseY - ch
+      ctx.fillStyle = '#2b2f35'
+      ctx.fillRect(baseX - cw / 2 + 5, topY + 6, 5, ch - 6)
+      ctx.fillRect(baseX + cw / 2 - 10, topY + 6, 5, ch - 6)
+      // undershelf
+      ctx.fillStyle = '#3a3f46'
+      ctx.fillRect(baseX - cw / 2 + 3, baseY - ch * 0.34, cw - 6, 4)
+      // the top, catching the lamps
+      const top = ctx.createLinearGradient(0, topY, 0, topY + 10)
+      top.addColorStop(0, '#7b828a')
+      top.addColorStop(1, '#4e545b')
+      ctx.fillStyle = top
+      ctx.fillRect(baseX - cw / 2, topY, cw, 9)
+      ctx.fillStyle = 'rgba(255,255,255,0.22)'
+      ctx.fillRect(baseX - cw / 2, topY, cw, 2)
+      break
+    }
+
+    case 'gasBurner': {
+      // A burner with a live flame. This is the main moving light source in
+      // the room, so the flicker is deliberately strong.
+      const bw = TILE_W * 0.86
+      const topY = baseY - TILE_H * 1.05
+      ctx.fillStyle = '#23272c'
+      ctx.fillRect(baseX - bw / 2, topY, bw, TILE_H * 1.05)
+      ctx.fillStyle = '#31363c'
+      ctx.fillRect(baseX - bw / 2, topY, bw, 7)
+      // grate
+      ctx.strokeStyle = '#15181c'
+      ctx.lineWidth = 2.4
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath()
+        ctx.moveTo(baseX + i * 7, topY + 1)
+        ctx.lineTo(baseX + i * 7, topY + 6)
+        ctx.stroke()
+      }
+      /**
+       * The flame. Three lobes, each on its own phase so the ring never
+       * pulses as one shape, and deliberately BIG — at 44px tiles a
+       * realistically-sized burner flame is a few pixels of smudge, and
+       * this is the main light source in the room.
+       */
+      const lick = 1 + Math.sin(now * 11 + x) * 0.18
+      for (let i = 0; i < 3; i++) {
+        const fx = baseX + (i - 1) * 8
+        const wob = 1 + Math.sin(now * 13 + i * 2.1 + x) * 0.2
+        const fh = TILE_H * (0.62 + (i === 1 ? 0.2 : 0)) * lick * wob
+        const flame = ctx.createLinearGradient(0, topY - fh, 0, topY + 2)
+        flame.addColorStop(0, 'rgba(255,236,190,0.95)')
+        flame.addColorStop(0.35, 'rgba(255,170,60,0.9)')
+        flame.addColorStop(0.75, 'rgba(90,170,255,0.85)')
+        flame.addColorStop(1, 'rgba(60,130,240,0.5)')
+        ctx.fillStyle = flame
+        ctx.beginPath()
+        ctx.moveTo(fx - 6, topY + 2)
+        ctx.quadraticCurveTo(fx - 7, topY - fh * 0.55, fx, topY - fh)
+        ctx.quadraticCurveTo(fx + 7, topY - fh * 0.55, fx + 6, topY + 2)
+        ctx.closePath()
+        ctx.fill()
+      }
+      // the pool of heat it throws
+      const heat = ctx.createRadialGradient(baseX, topY, 3, baseX, topY, 54)
+      heat.addColorStop(0, 'rgba(255,150,60,0.34)')
+      heat.addColorStop(1, 'rgba(255,120,40,0)')
+      ctx.fillStyle = heat
+      ctx.beginPath()
+      ctx.arc(baseX, topY, 54, 0, Math.PI * 2)
+      ctx.fill()
+      break
+    }
+
+    case 'biryaniPot': {
+      // The hero pot. `lid` closed is the Bear moment; open is the reveal.
+      const pw = TILE_W * 1.05
+      const ph = TILE_H * 0.82
+      const topY = baseY - TILE_H * 1.5
+      drawSteam(ctx, baseX, topY - 6, now, prop.lid === false ? 1.5 : 0.7)
+      // body
+      const body = ctx.createLinearGradient(baseX - pw / 2, 0, baseX + pw / 2, 0)
+      body.addColorStop(0, '#5a6068')
+      body.addColorStop(0.5, '#7d848c')
+      body.addColorStop(1, '#474d54')
+      ctx.fillStyle = body
+      ctx.fillRect(baseX - pw / 2, topY, pw, ph)
+      // handles
+      ctx.strokeStyle = '#3a3f45'
+      ctx.lineWidth = 3
+      for (const s of [-1, 1]) {
+        ctx.beginPath()
+        ctx.arc(baseX + s * (pw / 2 + 2), topY + ph * 0.3, 5, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      if (prop.lid === false) {
+        // rice, golden, heaped
+        ctx.fillStyle = '#e8d9b0'
+        ctx.beginPath()
+        ctx.ellipse(baseX, topY + 2, pw * 0.46, ph * 0.22, 0, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#d8a445'
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2
+          ctx.beginPath()
+          ctx.ellipse(
+            baseX + Math.cos(a) * pw * 0.26,
+            topY + 2 + Math.sin(a) * ph * 0.1,
+            3.4,
+            2.2,
+            0,
+            0,
+            Math.PI * 2,
+          )
+          ctx.fill()
+        }
+      } else {
+        // the lid, with its knob
+        ctx.fillStyle = '#8b9199'
+        ctx.beginPath()
+        ctx.ellipse(baseX, topY, pw * 0.54, ph * 0.2, 0, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#2f343a'
+        ctx.beginPath()
+        ctx.arc(baseX, topY - 5, 3.4, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      break
+    }
+
+    case 'cuttingBoard': {
+      const bw = TILE_W * 0.9
+      const topY = baseY - TILE_H * 1.18
+      ctx.fillStyle = '#c69a5f'
+      ctx.fillRect(baseX - bw / 2, topY, bw, 6)
+      ctx.fillStyle = 'rgba(80,52,26,0.4)'
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(baseX - bw / 2 + 4 + i * (bw / 5), topY + 1.5, 1.2, 3)
+      }
+      // whatever is being prepped
+      ctx.fillStyle = prop.color ?? '#5faf4f'
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath()
+        ctx.arc(baseX - 8 + i * 8, topY - 2, 2.6, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      break
+    }
+
+    case 'knifeBlock': {
+      const topY = baseY - TILE_H * 1.5
+      ctx.fillStyle = '#5b4632'
+      ctx.fillRect(baseX - 9, topY + 8, 18, TILE_H * 0.55)
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = '#2a2f35'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(baseX - 5 + i * 5, topY + 8)
+        ctx.lineTo(baseX - 3 + i * 5, topY - 6)
+        ctx.stroke()
+        ctx.strokeStyle = '#b9c0c8'
+        ctx.lineWidth = 1.2
+        ctx.beginPath()
+        ctx.moveTo(baseX - 5 + i * 5, topY + 8)
+        ctx.lineTo(baseX - 3.4 + i * 5, topY - 5)
+        ctx.stroke()
+      }
+      break
+    }
+
+    case 'spiceRack': {
+      // The most Indian-kitchen object in the room: a row of masala tins.
+      const topY = baseY - TILE_H * 1.62
+      const colors = ['#c2622a', '#d8a445', '#8d3b2a', '#5f7a2e', '#b8862f', '#7a3f1d']
+      ctx.fillStyle = '#4a3a2a'
+      ctx.fillRect(baseX - TILE_W * 0.5, topY + TILE_H * 0.36, TILE_W, 4)
+      for (let i = 0; i < 6; i++) {
+        const sx = baseX - TILE_W * 0.42 + i * (TILE_W * 0.17)
+        ctx.fillStyle = '#9aa1a9'
+        ctx.fillRect(sx, topY + TILE_H * 0.1, TILE_W * 0.13, TILE_H * 0.26)
+        ctx.fillStyle = colors[i]
+        ctx.fillRect(sx + 1, topY + TILE_H * 0.13, TILE_W * 0.13 - 2, TILE_H * 0.14)
+      }
+      break
+    }
+
+    case 'oven': {
+      const ow = TILE_W * 1.4
+      const oh = TILE_H * 1.9
+      const topY = baseY - oh
+      ctx.fillStyle = '#2c3037'
+      ctx.fillRect(baseX - ow / 2, topY, ow, oh)
+      ctx.fillStyle = '#3a4047'
+      ctx.fillRect(baseX - ow / 2, topY, ow, 8)
+      // door glass, lit from inside
+      const glow = ctx.createLinearGradient(0, topY + 14, 0, topY + oh * 0.72)
+      glow.addColorStop(0, 'rgba(255,150,50,0.5)')
+      glow.addColorStop(1, 'rgba(180,70,20,0.65)')
+      ctx.fillStyle = glow
+      ctx.fillRect(baseX - ow / 2 + 6, topY + 14, ow - 12, oh * 0.58)
+      ctx.strokeStyle = '#1a1e23'
+      ctx.lineWidth = 2
+      ctx.strokeRect(baseX - ow / 2 + 6, topY + 14, ow - 12, oh * 0.58)
+      // handle
+      ctx.fillStyle = '#9aa1a9'
+      ctx.fillRect(baseX - ow / 2 + 4, topY + 9, ow - 8, 3.5)
+      break
+    }
+
+    case 'plateStack': {
+      const topY = baseY - TILE_H * 1.2
+      for (let i = 0; i < (prop.count ?? 5); i++) {
+        ctx.fillStyle = i % 2 ? '#e8ecef' : '#dfe4e8'
+        ctx.beginPath()
+        ctx.ellipse(baseX, topY - i * 3.4, TILE_W * 0.3, TILE_H * 0.11, 0, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(120,130,140,0.5)'
+        ctx.lineWidth = 0.8
+        ctx.stroke()
+      }
+      break
+    }
+
     default:
       break
+  }
+  ctx.restore()
+}
+
+/**
+ * STEAM — the one effect this game did not already have.
+ *
+ * Three soft radial puffs rising and fading on a loop, offset from each
+ * other so the column never pulses as a single shape. Built from the same
+ * radial-gradient idiom as the RGB strip's floor glow rather than from
+ * particles, because steam wants to be big, slow and translucent, and the
+ * particle system draws small opaque squares.
+ *
+ * `strength` scales both size and opacity: ~0.7 for a simmering pot, 1.5+
+ * for the lid coming off.
+ */
+function drawSteam(ctx, x, y, now, strength = 1) {
+  ctx.save()
+  for (let i = 0; i < 3; i++) {
+    const phase = (now * 0.45 + i * 0.33) % 1
+    const rise = phase * TILE_H * 2.4 * strength
+    const r = (9 + phase * 22) * strength
+    const alpha = (1 - phase) * 0.3 * strength
+    if (alpha <= 0.01) continue
+    const drift = Math.sin(now * 1.2 + i * 2.1) * 6 * phase
+    const g = ctx.createRadialGradient(x + drift, y - rise, 0, x + drift, y - rise, r)
+    g.addColorStop(0, `rgba(255,252,246,${alpha})`)
+    g.addColorStop(1, 'rgba(255,250,242,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(x + drift, y - rise, r, 0, Math.PI * 2)
+    ctx.fill()
   }
   ctx.restore()
 }
@@ -1024,6 +1305,37 @@ function drawCeilingStrip(ctx, w, h, now, music, shell = 'metro', rig = false) {
     ctx.fillRect(0, stripH * 0.3, w, 5)
     ctx.fillStyle = `hsla(${(hue + 140) % 360}, 90%, 70%, ${rig ? 0.75 : 0.35})`
     ctx.fillRect(0, stripH * 0.72, w, 3)
+    ctx.restore()
+    return
+  }
+
+  if (shell === 'kitchen') {
+    /**
+     * Hot service lamps over the pass. Nothing cycles and nothing pulses —
+     * a working kitchen is lit hard and flat, and keeping this steady is
+     * what lets the steam and the burners be the only moving light.
+     */
+    const g = ctx.createLinearGradient(0, 0, 0, stripH * 2.8)
+    g.addColorStop(0, 'rgba(255,208,140,0.5)')
+    g.addColorStop(1, 'rgba(255,170,90,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, stripH * 2.8)
+
+    // the heat-lamp bar itself, with its bulbs
+    ctx.fillStyle = 'rgba(58,44,34,0.9)'
+    ctx.fillRect(0, stripH * 0.26, w, 7)
+    const spacing = 96
+    for (let x = spacing * 0.5; x < w; x += spacing) {
+      const bulb = ctx.createRadialGradient(x, stripH * 0.4 + 6, 0, x, stripH * 0.4 + 6, 26)
+      bulb.addColorStop(0, 'rgba(255,196,110,0.85)')
+      bulb.addColorStop(1, 'rgba(255,170,80,0)')
+      ctx.fillStyle = bulb
+      ctx.beginPath()
+      ctx.arc(x, stripH * 0.4 + 6, 26, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#ffd08a'
+      ctx.fillRect(x - 7, stripH * 0.26 + 6, 14, 3)
+    }
     ctx.restore()
     return
   }
@@ -1159,6 +1471,181 @@ function drawGymShell(ctx, x0, x1, deckY, now, rig) {
     ctx.lineTo(px, roofY + TILE_H * 0.5)
     ctx.stroke()
   }
+
+  ctx.restore()
+}
+
+/**
+ * THE KITCHEN SHELL — the thing that makes Level 4 read as "a professional
+ * kitchen mid-service" rather than "furniture in a brown room".
+ *
+ * Same contract as the other two: world space, behind every prop, built from
+ * axis-aligned rects off the UNSHEARED cell origin. Two zones across the
+ * room, matching where the level puts its props:
+ *
+ *   x < 18    the line: subway tile, the burner wall, a rail of hanging pans
+ *   x >= 18   the pass: brushed steel, heat lamps, the ticket rail
+ *
+ * Deliberately darker and warmer than the gym. The gym was underlit and
+ * purple; this is underlit and ORANGE, lit almost entirely from the burners
+ * and the pass lamps, with hard shadows between them. That contrast is what
+ * makes the first half of the level feel like a different kind of pressure.
+ */
+function drawKitchenShell(ctx, x0, x1, deckY, now) {
+  const left = { x: x0 * TILE_W, y: deckY * TILE_H }
+  const right = { x: x1 * TILE_W, y: deckY * TILE_H }
+  const wallW = right.x - left.x
+  const roofY = left.y - TILE_H * 5.6
+  const splashY = left.y - TILE_H * 2.9
+  const split = left.x + wallW * 0.55
+
+  ctx.save()
+
+  // ---- back wall ----
+  const wall = ctx.createLinearGradient(0, roofY, 0, left.y)
+  wall.addColorStop(0, '#241a14')
+  wall.addColorStop(0.6, '#2e221a')
+  wall.addColorStop(1, '#1b1410')
+  ctx.fillStyle = wall
+  ctx.fillRect(left.x, roofY, wallW, left.y - roofY)
+
+  // ---- the line half: white subway tile, grimy at the grout ----
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(left.x, splashY, split - left.x, left.y - splashY)
+  ctx.clip()
+  ctx.fillStyle = '#cfc4b4'
+  ctx.fillRect(left.x, splashY, split - left.x, left.y - splashY)
+  const tileW = TILE_W * 0.62
+  const tileH = TILE_H * 0.52
+  ctx.strokeStyle = 'rgba(70,56,44,0.45)'
+  ctx.lineWidth = 1.4
+  let row = 0
+  for (let py = splashY; py < left.y; py += tileH, row++) {
+    const stagger = row % 2 ? tileW * 0.5 : 0
+    for (let px = left.x - tileW; px < split + tileW; px += tileW) {
+      ctx.strokeRect(px + stagger, py, tileW, tileH)
+    }
+  }
+  // grease haze rising off the burners
+  const grime = ctx.createLinearGradient(0, left.y, 0, splashY)
+  grime.addColorStop(0, 'rgba(120,78,40,0.42)')
+  grime.addColorStop(1, 'rgba(120,78,40,0)')
+  ctx.fillStyle = grime
+  ctx.fillRect(left.x, splashY, split - left.x, left.y - splashY)
+  ctx.restore()
+
+  // ---- the pass half: brushed stainless ----
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(split, splashY, right.x - split, left.y - splashY)
+  ctx.clip()
+  const steel = ctx.createLinearGradient(0, splashY, 0, left.y)
+  steel.addColorStop(0, '#5a5f66')
+  steel.addColorStop(0.5, '#464b52')
+  steel.addColorStop(1, '#33373d')
+  ctx.fillStyle = steel
+  ctx.fillRect(split, splashY, right.x - split, left.y - splashY)
+  // the brushed grain
+  ctx.strokeStyle = 'rgba(255,255,255,0.045)'
+  ctx.lineWidth = 1
+  for (let py = splashY; py < left.y; py += 3) {
+    ctx.beginPath()
+    ctx.moveTo(split, py)
+    ctx.lineTo(right.x, py)
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  // the seam where tile meets steel
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'
+  ctx.fillRect(split - 2, splashY, 4, left.y - splashY)
+
+  // ---- the extractor hood, running the whole width ----
+  const hoodY = roofY + TILE_H * 0.9
+  const hoodH = TILE_H * 1.5
+  const hood = ctx.createLinearGradient(0, hoodY, 0, hoodY + hoodH)
+  hood.addColorStop(0, '#6d737b')
+  hood.addColorStop(1, '#3c4147')
+  ctx.fillStyle = hood
+  ctx.fillRect(left.x, hoodY, wallW, hoodH)
+  // the angled lip that catches the lamp light
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'
+  ctx.fillRect(left.x, hoodY + hoodH - 5, wallW, 5)
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'
+  ctx.fillRect(left.x, hoodY + hoodH, wallW, TILE_H * 0.22)
+  // filter baffles
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+  ctx.lineWidth = 2
+  for (let px = left.x + 10; px < right.x; px += TILE_W * 0.7) {
+    ctx.beginPath()
+    ctx.moveTo(px, hoodY + 6)
+    ctx.lineTo(px, hoodY + hoodH - 8)
+    ctx.stroke()
+  }
+
+  // ---- the pot rail, with pans hanging off it ----
+  const railY = splashY - TILE_H * 0.85
+  ctx.strokeStyle = '#8b9199'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.moveTo(left.x + TILE_W * 0.5, railY)
+  ctx.lineTo(split - TILE_W * 0.4, railY)
+  ctx.stroke()
+  for (let i = 0; i < 7; i++) {
+    const px = left.x + TILE_W * (1.2 + i * 1.6)
+    if (px > split - TILE_W) break
+    const swing = Math.sin(now * 0.7 + i) * 1.2
+    ctx.strokeStyle = 'rgba(200,206,214,0.7)'
+    ctx.lineWidth = 1.6
+    ctx.beginPath()
+    ctx.moveTo(px, railY)
+    ctx.lineTo(px + swing, railY + TILE_H * 0.3)
+    ctx.stroke()
+    // the pan itself
+    ctx.fillStyle = i % 2 ? '#3a3f45' : '#4a5057'
+    ctx.beginPath()
+    ctx.ellipse(px + swing, railY + TILE_H * 0.55, TILE_W * 0.26, TILE_H * 0.3, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)'
+    ctx.lineWidth = 1.2
+    ctx.stroke()
+  }
+
+  // ---- the ticket rail over the pass ----
+  const tRailY = splashY - TILE_H * 0.7
+  ctx.strokeStyle = '#9aa1a9'
+  ctx.lineWidth = 2.5
+  ctx.beginPath()
+  ctx.moveTo(split + TILE_W * 0.5, tRailY)
+  ctx.lineTo(right.x - TILE_W * 0.5, tRailY)
+  ctx.stroke()
+  for (let i = 0; i < 9; i++) {
+    const px = split + TILE_W * (1 + i * 1.3)
+    if (px > right.x - TILE_W) break
+    const flutter = Math.sin(now * 1.4 + i * 0.8) * 0.8
+    ctx.save()
+    ctx.translate(px, tRailY)
+    ctx.rotate(flutter * 0.02)
+    ctx.fillStyle = 'rgba(244,240,228,0.92)'
+    ctx.fillRect(-TILE_W * 0.16, 0, TILE_W * 0.32, TILE_H * 0.58)
+    ctx.strokeStyle = 'rgba(90,80,66,0.5)'
+    ctx.lineWidth = 0.8
+    for (let l = 1; l < 4; l++) {
+      ctx.beginPath()
+      ctx.moveTo(-TILE_W * 0.11, TILE_H * 0.1 * l)
+      ctx.lineTo(TILE_W * 0.11, TILE_H * 0.1 * l)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  // ---- the warm wash off the burners, along the floor line ----
+  const wash = ctx.createLinearGradient(0, left.y - TILE_H * 2.6, 0, left.y)
+  wash.addColorStop(0, 'rgba(255,146,54,0)')
+  wash.addColorStop(1, 'rgba(255,146,54,0.26)')
+  ctx.fillStyle = wash
+  ctx.fillRect(left.x, left.y - TILE_H * 2.6, wallW, TILE_H * 2.6)
 
   ctx.restore()
 }
@@ -1492,6 +1979,7 @@ export function render(ctx, world, view, state) {
   if (interior) {
     const deckY = g.height - 3 // the top of the floor slab
     if (shell === 'gym') drawGymShell(ctx, 0, g.width, deckY, now, rig)
+    else if (shell === 'kitchen') drawKitchenShell(ctx, 0, g.width, deckY, now)
     else drawCarriageShell(ctx, 0, g.width, deckY, now, music)
   }
 
@@ -1545,7 +2033,9 @@ export function render(ctx, world, view, state) {
     }
     if (deck >= 0) {
       drawFloorSlab(ctx, 0, deck, g.width, ground.main, {
-        line: shell === 'gym' ? null : undefined,
+        // Only the metro has a painted safety line. A gym floor and a
+        // kitchen floor are both just floor.
+        line: shell === 'gym' || shell === 'kitchen' ? null : undefined,
       })
     }
   }
@@ -1675,7 +2165,36 @@ export function render(ctx, world, view, state) {
     ctx.fillRect(p.x - 16, p.y - 400, 32, 400)
     ctx.restore()
     drawShadowBlob(ctx, world, gl.x, gl.y)
-    drawEmoji(ctx, gl.x, gl.y, gl.emoji, 40, bob)
+    /**
+     * A goal can carry a real photo instead of an emoji (`image:` on the
+     * goal). Level 4's biryani does, because "a plate of biryani" is the
+     * payoff of the whole level and a 🍗 does not sell it. Falls back to
+     * the emoji until the file loads, or forever if it is missing.
+     */
+    const img = gl.image ? ensureImage(gl.image) : null
+    if (img) {
+      const size = 64
+      ctx.save()
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'
+      ctx.shadowBlur = 10
+      ctx.shadowOffsetY = 3
+      ctx.beginPath()
+      ctx.arc(p.x, p.y - size * 0.55 + bob, size * 0.5, 0, Math.PI * 2)
+      ctx.closePath()
+      ctx.clip()
+      ctx.drawImage(img, p.x - size * 0.5, p.y - size * 1.05 + bob, size, size)
+      ctx.restore()
+      // a warm rim so it reads as a plated dish, not a pasted cutout
+      ctx.save()
+      ctx.strokeStyle = 'rgba(255,214,140,0.75)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(p.x, p.y - size * 0.55 + bob, size * 0.5, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+    } else {
+      drawEmoji(ctx, gl.x, gl.y, gl.emoji, 40, bob)
+    }
   }
 
   // ---- hazards ----

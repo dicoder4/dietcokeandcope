@@ -21,12 +21,14 @@ import {
   unduck,
   metroAmbience,
   gymAmbience,
+  kitchenAmbience,
   playClip,
   playSynthSong,
   startMusicMode,
 } from './Sound.js'
 import { MUSIC_XP_PER_ROUND } from '../config/songs.js'
 import { GRAPHICS_XP_PER_PUZZLE } from '../config/framebuffers.js'
+import { KITCHEN_XP_PER_LAYER } from '../config/kitchen.js'
 
 /** Resolve a beat's `focus` field to a projected world point. */
 function resolveFocus(focus, game) {
@@ -1057,6 +1059,216 @@ export const BEATS = {
   gymAmbience: {
     enter(dir, beat) {
       gymAmbience(beat.on !== false)
+    },
+  },
+
+  kitchenAmbience: {
+    enter(dir, beat) {
+      kitchenAmbience(beat.on !== false)
+    },
+  },
+
+  /**
+   * headphones — the big over-ear cans, not Level 2's pink buds. Same shape
+   * as the `earphones` beat, separate accessory.
+   */
+  headphones: {
+    enter(dir, beat, game) {
+      const who = beat.who ?? 'player'
+      const target = who === 'player' ? game.world.player : findNpc(game, who)
+      if (target) target.accessory = beat.on === false ? null : 'headphones'
+      if (beat.on !== false) sfx.pickup()
+      game.dirty = true
+    },
+  },
+
+  /**
+   * THE KITCHEN — Level 4's cooking minigame.
+   *
+   * Two phases in one beat, because they are one continuous scene:
+   *
+   *   ingredients  find the twelve real things on a counter that also has
+   *                seven ridiculous things on it. Clicking a ridiculous
+   *                thing is NOT a failure — it plays a line and carries on.
+   *   cooking      eight fast prompts, one tap each (a few need several).
+   *                Missing the window just re-prompts.
+   *
+   * There is deliberately no lose state anywhere in here. The comedy of this
+   * level comes from succeeding and being punished for it, so the cooking
+   * itself must never be the thing that stops him. The worst outcome
+   * available is taking slightly longer and getting shouted at, which is
+   * the same outcome as doing it right.
+   *
+   * `beat.required` / `beat.distractors` / `beat.steps` come from
+   * config/kitchen.js. The validator checks they can actually be completed.
+   */
+  /**
+   * THE KITCHEN — Level 4's cooking minigame.
+   *
+   * Two phases in one beat, because they are one continuous scene at the
+   * stove with his back to the other two:
+   *
+   *   dish     pick what to cook. Biryani is his favourite food, so a wrong
+   *            pick is dismissed out of hand and comes back. Nobody else can
+   *            see this screen — they find out when he serves it.
+   *   jigsaw   a real GRID x GRID jigsaw of a plate of biryani. Click two
+   *            pieces to swap them; solved when all of them are home.
+   *
+   * There is deliberately no lose state — no timer, no move limit, nothing
+   * to fail. The comedy of this level is that he succeeds completely and is
+   * punished for it, so the cooking itself must never be what stops him.
+   */
+  kitchen: {
+    enter(dir, beat, game) {
+      dir.controlEnabled = false
+      const grid = beat.grid ?? 3
+      const count = grid * grid
+
+      /**
+       * Shuffle the board. Seeded off the beat index rather than Math.random
+       * so a retry after death deals the SAME board — otherwise he would be
+       * solving a puzzle that silently rearranged itself under him.
+       *
+       * The loop re-shuffles if it happens to land already-solved, so the
+       * puzzle is never handed over finished.
+       */
+      let seed = (dir.index + 11) * 2654435761
+      const nextRand = (n) => {
+        seed = (seed * 1664525 + 1013904223) >>> 0
+        return seed % n
+      }
+      let order = []
+      for (let attempt = 0; attempt < 8; attempt++) {
+        order = Array.from({ length: count }, (_, i) => i)
+        for (let i = count - 1; i > 0; i--) {
+          const j = nextRand(i + 1)
+          ;[order[i], order[j]] = [order[j], order[i]]
+        }
+        if (order.some((piece, i) => piece !== i)) break
+      }
+
+      dir.kitchen = {
+        phase: 'dish',
+        dishes: beat.dishes ?? [],
+        pendingDish: null,
+        confirmText: null,
+        note: null,
+        // jigsaw state
+        image: beat.image ?? null,
+        grid,
+        order,
+        selected: null,
+        moves: 0,
+        best: order.filter((piece, i) => piece === i).length,
+        solved: false,
+      }
+      dir.state.phaseStart = 0
+      sfx.ticketPrint()
+      void game
+    },
+
+    update(dir, beat, game) {
+      const k = dir.kitchen
+      const st = dir.state
+      if (!k) return true
+
+      // ---- phase 1: what are we making? --------------------------------
+      if (k.phase === 'dish') {
+        // dismissing a dish he was never going to cook
+        if (st.kcConfirm != null) {
+          st.kcConfirm = null
+          k.confirmText = null
+          k.pendingDish = null
+          dir.kitchen = { ...k }
+          game.dirty = true
+          return false
+        }
+
+        if (st.kcDish != null) {
+          const id = st.kcDish
+          st.kcDish = null
+          const dish = k.dishes.find((d) => d.id === id)
+          if (dish?.correct) {
+            k.phase = 'jigsaw'
+            k.note = null
+            st.phaseStart = st.t
+            dir.kitchen = { ...k }
+            sfx.pickup()
+            game.world.camera.kick(0.2)
+            game.dirty = true
+          } else if (dish) {
+            k.pendingDish = dish.id
+            k.confirmText = dish.confirm ?? 'No.'
+            dir.kitchen = { ...k }
+            sfx.invalid()
+            game.dirty = true
+          }
+        }
+        return false
+      }
+
+      // ---- phase 2: the jigsaw -----------------------------------------
+      // Click one piece, click another, they swap. Solved when every piece
+      // sits at its own index. No timer, no move limit, no way to lose.
+      if (k.phase === 'jigsaw') {
+        if (st.kcPiece != null) {
+          const slot = st.kcPiece
+          st.kcPiece = null
+
+          if (k.selected == null) {
+            k.selected = slot
+            sfx.select()
+          } else if (k.selected === slot) {
+            k.selected = null // clicking the same piece deselects
+          } else {
+            const order = [...k.order]
+            ;[order[k.selected], order[slot]] = [order[slot], order[k.selected]]
+            k.order = order
+            k.selected = null
+            k.moves += 1
+
+            const solvedNow = order.every((piece, i) => piece === i)
+            const gained = order.filter((piece, i) => piece === i).length
+            if (gained > k.best) {
+              // only ever award for NEW ground, so shuffling the same two
+              // pieces back and forth cannot farm XP
+              game.stats.award({
+                xp: KITCHEN_XP_PER_LAYER * (gained - k.best),
+                label: '+KITCHEN XP',
+              })
+              k.best = gained
+            }
+            sfx.sizzle()
+            game.world.camera.kick(0.1)
+
+            if (solvedNow) {
+              k.solved = true
+              k.phase = 'done'
+              dir.kitchen = { ...k }
+              sfx.pickup()
+              game.world.camera.kick(0.3)
+              game.world.spawnParticles?.(
+                game.world.player.x,
+                game.world.player.y - 1,
+                '#ffd08a',
+                26,
+                2.0,
+              )
+              game.dirty = true
+              return true
+            }
+          }
+          dir.kitchen = { ...k }
+          game.dirty = true
+        }
+        return false
+      }
+
+      return true
+    },
+
+    exit(dir) {
+      dir.kitchen = null
     },
   },
 

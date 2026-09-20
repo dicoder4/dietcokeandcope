@@ -2337,6 +2337,211 @@ button {
 }
 
 /* ============================================================
+   THE KITCHEN — Level 4's biryani minigame
+   Built on the .sq-* panel vocabulary above (root, panel, head,
+   line, key, dots) so all four minigames read as one game. Only
+   what is genuinely new gets a .kc- rule.
+
+   The prefix is .kc- and NOT .fb-, which FoodBuilder and
+   Framebuffer already share between them — .fb-panel and
+   .fb-label are declared twice in this file as a result. A
+   kitchen overlay is the most likely thing to collide with the
+   food builder, so it gets its own namespace.
+   ============================================================ */
+
+.kc-root {
+  position: absolute;
+  inset: 0;
+  z-index: 42;
+  display: grid;
+  place-items: center;
+  /* warmer and darker than the quiz — this room is lit by fire */
+  background: rgba(18, 10, 5, 0.88);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.2s;
+  padding: 24px;
+}
+
+.kc-panel {
+  width: min(760px, 95vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 176, 90, 0.3),
+    0 0 46px rgba(255, 140, 50, 0.12);
+}
+
+/* --- phase 1: what are we making --- */
+
+.kc-dishes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.kc-dish {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--panel-edge);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, transform 0.14s ease;
+  animation: fadeUp 0.26s backwards;
+}
+
+.kc-dish:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.kc-dish-emoji {
+  font-size: 26px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+}
+
+.kc-dish-label {
+  flex: 1;
+}
+
+/* the "are you sure?" interstitial */
+.kc-confirm {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 18px 0 6px;
+}
+
+.kc-confirm-text {
+  font-size: 17px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--warn);
+  max-width: 34ch;
+  line-height: 1.5;
+}
+
+/* --- phase 2: the jigsaw --- */
+
+.kc-jigsaw {
+  display: grid;
+  grid-template-columns: repeat(var(--kc-grid, 3), 1fr);
+  gap: 4px;
+  width: min(390px, 78vw);
+  aspect-ratio: 1;
+  margin: 6px auto 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: #1a1410;
+  box-shadow: inset 0 0 0 1px rgba(255, 176, 90, 0.25), 0 14px 34px rgba(0, 0, 0, 0.5);
+  transition: box-shadow 0.35s ease;
+}
+
+.kc-piece {
+  position: relative;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background-color: #2a2018;
+  background-repeat: no-repeat;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, outline-color 0.14s ease;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+.kc-piece:hover {
+  transform: scale(1.03);
+  z-index: 1;
+}
+
+/* the piece waiting for something to swap with */
+.kc-piece.picked {
+  outline-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(255, 198, 61, 0.35), 0 8px 20px rgba(0, 0, 0, 0.5);
+  transform: scale(1.06);
+  z-index: 2;
+}
+
+/* A piece that is home gets only a whisper of a tint — enough to track
+   progress, not enough to solve the puzzle for you. */
+.kc-piece.home::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 2px rgba(79, 194, 106, 0.55);
+  pointer-events: none;
+}
+
+.kc-piece-num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(28, 18, 10, 0.75);
+  font-family: var(--font);
+  font-size: 19px;
+  font-weight: 900;
+}
+
+/* solved: the seams close up and the whole plate lights warm */
+.kc-jigsaw.solved {
+  gap: 0;
+  box-shadow: inset 0 0 0 2px rgba(255, 198, 61, 0.7), 0 0 44px rgba(255, 168, 60, 0.3),
+    0 14px 34px rgba(0, 0, 0, 0.5);
+  animation: kcPlated 0.5s ease;
+}
+
+.kc-jigsaw.solved .kc-piece {
+  border-radius: 0;
+  cursor: default;
+}
+
+.kc-jigsaw.solved .kc-piece.home::after {
+  box-shadow: none;
+}
+
+@keyframes kcPlated {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+@media (max-width: 460px) {
+  .kc-panel {
+    padding: 16px 16px 20px;
+  }
+  .kc-jigsaw {
+    width: min(300px, 86vw);
+  }
+}
+
+/* The swap animations and the plating flash are the whole feel of this
+   puzzle, so they get a real reduced-motion path. */
+@media (prefers-reduced-motion: reduce) {
+  .kc-dish,
+  .kc-piece,
+  .kc-jigsaw.solved {
+    animation: none;
+    transition: none;
+  }
+  .kc-piece:hover,
+  .kc-piece.picked {
+    transform: none;
+  }
+}
+
+/* ============================================================
    DEV PANEL — dev builds only, never shipped
    Deliberately plain and slightly ugly: it should never be
    mistaken for part of the game.

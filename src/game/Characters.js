@@ -133,6 +133,24 @@ export function drawCharacter(ctx, charId, x, y, pose = {}) {
     ctx.lineTo(cx - bodyW * 0.66, ty - bodyH * 0.42 + pump)
     ctx.moveTo(cx + bodyW * 0.45, ty + bodyH * 0.1)
     ctx.lineTo(cx + bodyW * 0.66, ty - bodyH * 0.42 - pump)
+  } else if (reaction === 'backrub') {
+    /**
+     * ONE arm reaching out to the shoulder in front, kneading. The other
+     * stays down at his side.
+     *
+     * One hand, not two, on purpose: it has to read as a casual "you work
+     * too hard" shoulder squeeze in passing, and two hands on both
+     * shoulders from behind reads as something else entirely. The reach
+     * direction follows `facing`, so this works from either side.
+     */
+    const knead = Math.sin(animT * 5) * 2.6
+    const dir = facing >= 0 ? 1 : -1
+    // the working arm, out at shoulder height
+    ctx.moveTo(cx + dir * bodyW * 0.45, ty + bodyH * 0.1)
+    ctx.lineTo(cx + dir * bodyW * 0.95, ty + bodyH * 0.04 + knead)
+    // the idle arm
+    ctx.moveTo(cx - dir * bodyW * 0.45, ty + bodyH * 0.1)
+    ctx.lineTo(cx - dir * bodyW * 0.58, ty + bodyH * 0.34)
   } else {
     ctx.moveTo(cx - bodyW * 0.45, ty + bodyH * 0.1)
     ctx.lineTo(cx - bodyW * 0.62, ty + bodyH * 0.3 + armSwing * 0.4)
@@ -165,6 +183,12 @@ export function drawCharacter(ctx, charId, x, y, pose = {}) {
   // the collar, and the little notes that say the music is finally on.
   if (accessory === 'earphonesWorn') {
     drawEarphonesWorn(ctx, cx, hy, hr, ty, animT)
+  }
+
+  // ---- the big headphones ----
+  // Level 4's ending. Also over the head, for the same reason.
+  if (accessory === 'headphones') {
+    drawHeadphones(ctx, cx, hy, hr, animT)
   }
 
   ctx.restore()
@@ -274,6 +298,65 @@ function drawEarphonesWorn(ctx, cx, hy, hr, ty, animT) {
     const nx = cx + hr * (1.3 + i * 0.28) + Math.sin(t * 6 + i) * 4
     ctx.fillStyle = i % 2 ? EARPHONE_PINK : '#ffd166'
     ctx.fillText(i % 2 ? '♪' : '♫', nx, hy - hr * 0.6 - t * 22)
+  }
+
+  ctx.restore()
+}
+
+/**
+ * Big over-ear HEADPHONES — Level 4's ending.
+ *
+ * Deliberately not the Level 2 earphones: those are little pink buds on a
+ * cable, and this moment needs the other thing entirely — the large closed-
+ * back cans you put on to stop hearing the world. Drawn AFTER the head so
+ * the cups sit over the ears rather than behind them.
+ */
+function drawHeadphones(ctx, cx, hy, hr, animT) {
+  ctx.save()
+
+  // the headband, arcing over the top of the skull
+  ctx.strokeStyle = '#2b3038'
+  ctx.lineWidth = 5.2
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.arc(cx, hy, hr * 1.12, Math.PI * 1.12, Math.PI * 1.88)
+  ctx.stroke()
+  // a highlight along the band so it reads as moulded plastic
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+  ctx.lineWidth = 1.6
+  ctx.beginPath()
+  ctx.arc(cx, hy - 1.4, hr * 1.12, Math.PI * 1.2, Math.PI * 1.8)
+  ctx.stroke()
+
+  // the ear cups
+  for (const s of [-1, 1]) {
+    const ex2 = cx + s * hr * 1.04
+    const ey2 = hy + hr * 0.12
+    ctx.fillStyle = '#20252c'
+    ctx.beginPath()
+    ctx.roundRect(ex2 - 5.4, ey2 - 7.4, 10.8, 15, 5)
+    ctx.fill()
+    // the padded ring
+    ctx.fillStyle = '#3a414a'
+    ctx.beginPath()
+    ctx.ellipse(ex2, ey2, 3.3, 5.6, 0, 0, Math.PI * 2)
+    ctx.fill()
+    // a small rim light on the outer edge
+    ctx.fillStyle = 'rgba(255,255,255,0.16)'
+    ctx.beginPath()
+    ctx.roundRect(ex2 + s * 3.4, ey2 - 6, 1.6, 12, 1)
+    ctx.fill()
+  }
+
+  // music notes, same idiom as the earphones — the world has sound again
+  ctx.font = '11px system-ui, "Segoe UI Emoji", sans-serif'
+  ctx.textAlign = 'center'
+  for (let i = 0; i < 3; i++) {
+    const t = (animT * 0.8 + i * 0.33) % 1
+    ctx.globalAlpha = Math.max(0, 1 - t) * 0.9
+    const nx = cx + hr * (1.4 + i * 0.28) + Math.sin(t * 6 + i) * 4
+    ctx.fillStyle = i % 2 ? '#7ed0ff' : '#ffd166'
+    ctx.fillText(i % 2 ? '♪' : '♫', nx, hy - hr * 0.7 - t * 22)
   }
 
   ctx.restore()
@@ -416,6 +499,73 @@ function drawStylizedHead(ctx, c, cx, cy, hr, facing, animT, talking, reaction) 
       ctx.arc(cx + ex + 3.4, ey + hr * 0.02, 2.8, Math.PI * 1.05, Math.PI * 1.95)
       ctx.stroke()
       break
+    case 'smirk':
+      // half-lidded and completely unbothered — he knows he can cook
+      ctx.lineWidth = 1.9
+      ctx.beginPath()
+      ctx.moveTo(cx + ex - 5.6, ey - 0.6)
+      ctx.lineTo(cx + ex - 1.4, ey - 0.6)
+      ctx.moveTo(cx + ex + 1.4, ey - 0.6)
+      ctx.lineTo(cx + ex + 5.6, ey - 0.6)
+      ctx.stroke()
+      // one brow cocked
+      ctx.lineWidth = 1.4
+      ctx.beginPath()
+      ctx.moveTo(cx + ex + 1.2, ey - hr * 0.3)
+      ctx.lineTo(cx + ex + 6, ey - hr * 0.2)
+      ctx.stroke()
+      break
+    case 'hearts': {
+      /**
+       * Heart eyes. Chirantan is delighted to see him and the game should
+       * not be subtle about it. Beating on animT so they pulse.
+       */
+      const beat = 1 + Math.sin(animT * 6) * 0.14
+      ctx.fillStyle = '#e8456b'
+      for (const s of [-1, 1]) {
+        const hx = cx + ex + s * 3.6
+        const hs = 2.5 * beat
+        ctx.beginPath()
+        ctx.moveTo(hx, ey + hs * 0.95)
+        ctx.bezierCurveTo(hx - hs * 1.5, ey - hs * 0.2, hx - hs * 0.5, ey - hs * 1.3, hx, ey - hs * 0.4)
+        ctx.bezierCurveTo(hx + hs * 0.5, ey - hs * 1.3, hx + hs * 1.5, ey - hs * 0.2, hx, ey + hs * 0.95)
+        ctx.fill()
+      }
+      ctx.fillStyle = ink
+      break
+    }
+    case 'relaxed':
+      // fully switched off. Closed arcs like relief, but wider and even
+      // lower — the backrub face. Brows unclench upward, which is most of
+      // what reads as "this man has no thoughts right now".
+      ctx.lineWidth = 1.6
+      ctx.beginPath()
+      ctx.arc(cx + ex - 3.4, ey + hr * 0.05, 3.2, Math.PI * 1.02, Math.PI * 1.98)
+      ctx.arc(cx + ex + 3.4, ey + hr * 0.05, 3.2, Math.PI * 1.02, Math.PI * 1.98)
+      ctx.stroke()
+      ctx.lineWidth = 1.3
+      ctx.beginPath()
+      ctx.arc(cx + ex - 3.4, ey - hr * 0.2, 3, Math.PI * 1.15, Math.PI * 1.85)
+      ctx.arc(cx + ex + 3.4, ey - hr * 0.2, 3, Math.PI * 1.15, Math.PI * 1.85)
+      ctx.stroke()
+      break
+    case 'crying':
+      // squeezed shut and turned DOWN — the inverse of happy's arcs, which
+      // is what stops this reading as a smile. Tears are drawn below.
+      ctx.lineWidth = 1.8
+      ctx.beginPath()
+      ctx.arc(cx + ex - 3.4, ey + hr * 0.16, 3, Math.PI * 0.08, Math.PI * 0.92)
+      ctx.arc(cx + ex + 3.4, ey + hr * 0.16, 3, Math.PI * 0.08, Math.PI * 0.92)
+      ctx.stroke()
+      // brows pushed up in the middle — the dramatic wobble
+      ctx.lineWidth = 1.4
+      ctx.beginPath()
+      ctx.moveTo(cx + ex - 6, ey - hr * 0.16)
+      ctx.lineTo(cx + ex - 1.4, ey - hr * 0.3)
+      ctx.moveTo(cx + ex + 1.4, ey - hr * 0.3)
+      ctx.lineTo(cx + ex + 6, ey - hr * 0.16)
+      ctx.stroke()
+      break
     case 'frustration':
       // brows slammed together over hard dots
       dotEyes(2.2)
@@ -487,6 +637,64 @@ function drawStylizedHead(ctx, c, cx, cy, hr, facing, animT, talking, reaction) 
     ctx.stroke()
     ctx.strokeStyle = ink
   }
+  if (reaction === 'hearts') {
+    // little hearts drifting up off the head, on staggered loops
+    for (let i = 0; i < 3; i++) {
+      const rise = (animT * 0.8 + i * 0.33) % 1
+      const a = (1 - rise) * 0.85
+      if (a <= 0.02) continue
+      const hx = cx + (i - 1) * hr * 0.6 + Math.sin(animT * 2 + i) * 3
+      const hy2 = cy - hr * 1.05 - rise * hr * 1.5
+      const hs = 2.6 + rise * 1.4
+      ctx.fillStyle = `rgba(232,69,107,${a})`
+      ctx.beginPath()
+      ctx.moveTo(hx, hy2 + hs * 0.95)
+      ctx.bezierCurveTo(hx - hs * 1.5, hy2 - hs * 0.2, hx - hs * 0.5, hy2 - hs * 1.3, hx, hy2 - hs * 0.4)
+      ctx.bezierCurveTo(hx + hs * 0.5, hy2 - hs * 1.3, hx + hs * 1.5, hy2 - hs * 0.2, hx, hy2 + hs * 0.95)
+      ctx.fill()
+    }
+    ctx.fillStyle = ink
+  }
+  if (reaction === 'relaxed') {
+    // two slow contentment puffs, bobbing on animT so the moment breathes
+    ctx.strokeStyle = 'rgba(210,230,250,0.5)'
+    ctx.lineWidth = 1.4
+    for (let i = 0; i < 2; i++) {
+      const drift = Math.sin(animT * 1.6 + i * 1.4) * 1.2
+      ctx.beginPath()
+      ctx.arc(
+        cx + hr * (0.98 + i * 0.28),
+        cy + hr * (0.42 - i * 0.34) + drift,
+        2.6 - i * 0.7,
+        Math.PI * 0.75,
+        Math.PI * 1.95,
+      )
+      ctx.stroke()
+    }
+    ctx.strokeStyle = ink
+  }
+  if (reaction === 'crying') {
+    /**
+     * Tears, one per eye, falling on a loop. They are deliberately big and
+     * evenly spaced — this is a cartoon meltdown over a plate of biryani,
+     * not a sad scene, and the exaggeration is what keeps it funny.
+     */
+    ctx.fillStyle = 'rgba(126,200,227,0.9)'
+    for (const s of [-1, 1]) {
+      const fall = (animT * 1.5 + (s > 0 ? 0.5 : 0)) % 1
+      ctx.beginPath()
+      ctx.ellipse(
+        cx + ex + s * 3.4,
+        ey + hr * 0.3 + fall * hr * 0.75,
+        2.1,
+        3.1 + fall * 1.2,
+        0,
+        0,
+        Math.PI * 2,
+      )
+      ctx.fill()
+    }
+  }
 
   // ---- mouth ----
   // Flaps while talking, which is most of what sells a dialogue scene.
@@ -552,5 +760,30 @@ function drawStylizedHead(ctx, c, cx, cy, hr, facing, animT, talking, reaction) 
     ctx.quadraticCurveTo(cx + ex - hr * 0.07, cy + hr * 0.42, cx + ex, cy + hr * 0.52)
     ctx.quadraticCurveTo(cx + ex + hr * 0.07, cy + hr * 0.62, cx + ex + hr * 0.22, cy + hr * 0.52)
     ctx.stroke()
+  } else if (reaction === 'relaxed') {
+    // barely there — a tiny, slack, extremely content curve
+    ctx.lineWidth = 1.4
+    ctx.beginPath()
+    ctx.arc(cx + ex, cy + hr * 0.42, hr * 0.18, 0.22 * Math.PI, 0.78 * Math.PI)
+    ctx.stroke()
+  } else if (reaction === 'hearts' || reaction === 'backrub') {
+    // a big open grin — he is thrilled
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(cx + ex, cy + hr * 0.32, hr * 0.34, 0.12 * Math.PI, 0.88 * Math.PI)
+    ctx.stroke()
+  } else if (reaction === 'smirk') {
+    // one side up. The "Me uh? ok bro" face.
+    ctx.lineWidth = 1.8
+    ctx.beginPath()
+    ctx.moveTo(cx + ex - hr * 0.22, cy + hr * 0.52)
+    ctx.quadraticCurveTo(cx + ex + hr * 0.05, cy + hr * 0.56, cx + ex + hr * 0.26, cy + hr * 0.38)
+    ctx.stroke()
+  } else if (reaction === 'crying') {
+    // a wide open wail, wobbling on animT so it never sits still
+    const wail = hr * (0.26 + Math.sin(animT * 9) * 0.04)
+    ctx.beginPath()
+    ctx.ellipse(cx + ex, cy + hr * 0.54, hr * 0.2, wail, 0, 0, Math.PI * 2)
+    ctx.fill()
   }
 }

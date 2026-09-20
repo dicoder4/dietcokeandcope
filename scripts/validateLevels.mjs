@@ -33,10 +33,11 @@
 import level1 from '../src/levels/level1.js'
 import level2 from '../src/levels/level2.js'
 import level3 from '../src/levels/level3.js'
+import level4 from '../src/levels/level4.js'
 import { BLOCK_TYPES, footprint } from '../src/entities/Block.js'
 import { CAST } from '../src/config/gameConfig.js'
 
-const LEVELS = [level1, level2, level3]
+const LEVELS = [level1, level2, level3, level4]
 
 const SOLID = new Set(['#', '=', '|', '_', 'B'])
 const FATAL_FALL = 6
@@ -253,6 +254,39 @@ function checkStoryScript(def) {
         }
       } else {
         fail('framebuffer beat has unknown puzzle kind "' + p.kind + '"')
+      }
+    }
+
+    /**
+     * The kitchen has the same strand-forever failure mode as the puzzles
+     * above: the beat only finishes once every required ingredient has been
+     * found and every cooking step landed. An ingredient that is required
+     * but not on the counter can never be picked, a step with a zero-second
+     * window can never be tapped in time, and either one hangs the script
+     * at a point nobody reaches until they have played the whole level.
+     */
+    if (b.t === 'kitchen') {
+      const dishes = b.dishes ?? []
+
+      if (!dishes.length) fail('kitchen beat has no dishes to choose from')
+
+      // Exactly one dish may be `correct` — none means the dish screen can
+      // never be left, several means the "wrong dish" gag never fires.
+      const right = dishes.filter((d) => d.correct)
+      if (right.length !== 1) {
+        fail('kitchen beat has ' + right.length + ' correct dishes — it must have exactly 1')
+      }
+      for (const d of dishes) {
+        if (!d.correct && !d.confirm) {
+          fail('kitchen dish "' + d.id + '" is not correct but has no dismissal line')
+        }
+      }
+
+      // A 1x1 jigsaw is handed over already solved, and a 0 grid has no
+      // pieces at all — either way the puzzle can never be played.
+      const grid = b.grid ?? 3
+      if (!Number.isInteger(grid) || grid < 2) {
+        fail('kitchen beat has grid ' + grid + ' — it must be an integer of at least 2')
       }
     }
   }

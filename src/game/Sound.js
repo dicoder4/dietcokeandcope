@@ -280,6 +280,72 @@ export const sfx = {
     noise({ dur: 0.35, vol: 0.2 })
     blip({ freq: 1046, dur: 0.3, type: 'square', vol: 0.3, delay: 0.95 })
   },
+
+  // ---- LEVEL 4: THE BEAR KITCHEN --------------------------------------
+
+  /**
+   * A pan hitting a steel counter, hard. This is the loudest thing in the
+   * game on purpose — it is the entrance of the kitchen boss and it has to
+   * physically interrupt the backrub.
+   */
+  panClang() {
+    blip({ freq: 3200, slideTo: 900, dur: 0.5, type: 'square', vol: 0.34 })
+    blip({ freq: 2100, slideTo: 620, dur: 0.7, type: 'triangle', vol: 0.26, delay: 0.01 })
+    blip({ freq: 160, slideTo: 60, dur: 0.3, type: 'sine', vol: 0.3 })
+    noise({ dur: 0.5, vol: 0.26 })
+  },
+
+  /** Knife on a board. Three fast chops. */
+  knifeChop() {
+    for (let i = 0; i < 3; i++) {
+      blip({ freq: 2600, slideTo: 1300, dur: 0.04, type: 'square', vol: 0.16, delay: i * 0.13 })
+      noise({ dur: 0.05, vol: 0.14, delay: i * 0.13 })
+    }
+  },
+
+  /** Something hitting hot oil. A burst that settles into a hiss. */
+  sizzle() {
+    noise({ dur: 0.9, vol: 0.3 })
+    blip({ freq: 5200, slideTo: 3000, dur: 0.6, type: 'sawtooth', vol: 0.07 })
+  },
+
+  /** Oil glugging into the pan. */
+  oilDrop() {
+    for (let i = 0; i < 3; i++) {
+      blip({ freq: 520 - i * 90, slideTo: 250, dur: 0.1, type: 'sine', vol: 0.2, delay: i * 0.11 })
+    }
+    noise({ dur: 0.3, vol: 0.12, delay: 0.1 })
+  },
+
+  /** Steam escaping under pressure — the lid about to come off. */
+  steamHiss() {
+    noise({ dur: 1.5, vol: 0.24 })
+    blip({ freq: 3400, slideTo: 5200, dur: 1.4, type: 'sawtooth', vol: 0.05 })
+  },
+
+  /** The reveal. Metal lifting off a pot, then the cloud. */
+  lidOpen() {
+    blip({ freq: 900, slideTo: 2300, dur: 0.35, type: 'triangle', vol: 0.24 })
+    noise({ dur: 1.1, vol: 0.2, delay: 0.2 })
+  },
+
+  /** A ticket coming off the rail. */
+  ticketPrint() {
+    for (let i = 0; i < 5; i++) {
+      blip({ freq: 1500 + Math.random() * 300, dur: 0.02, type: 'square', vol: 0.1, delay: i * 0.05 })
+    }
+  },
+
+  /**
+   * The needle coming off the record when they announce they are vegetarian.
+   * A downward smear with the noise floor dropping out from under it — this
+   * is the exact moment the level stops being serious.
+   */
+  recordScratch() {
+    blip({ freq: 900, slideTo: 90, dur: 0.42, type: 'sawtooth', vol: 0.32 })
+    noise({ dur: 0.3, vol: 0.16 })
+    blip({ freq: 320, slideTo: 60, dur: 0.3, type: 'square', vol: 0.16, delay: 0.3 })
+  },
 }
 
 // ======================================================================
@@ -369,6 +435,7 @@ export function metroAmbience(on) {
 
 /** Timer for the sporadic weight-clank gag. Cleared when the bed stops. */
 let gymClanks = null
+let kitchenClatter = null
 
 function startGymAmbience() {
   const c = ensure()
@@ -431,6 +498,86 @@ function startGymAmbience() {
 export function gymAmbience(on) {
   if (!enabled) return
   if (on) startGymAmbience()
+  else stopAmbience()
+}
+
+/**
+ * THE BEAR KITCHEN — Level 4's bed.
+ *
+ * Same construction as the gym and the metro, tuned to sound like a service
+ * in full swing: the extractor hood roaring overhead, a permanent sizzle off
+ * the pass, and the irregular clatter of a kitchen where five people are
+ * doing five different things. Busier and hotter than either of the others,
+ * because the first half of this level is supposed to feel stressful.
+ */
+function startKitchenAmbience() {
+  const c = ensure()
+  if (!c || ambience) return
+  const g = c.createGain()
+  g.gain.value = 0
+  g.gain.linearRampToValueAtTime(0.44, c.currentTime + 1.0)
+  g.connect(master)
+
+  // the extractor hood — a big, low, ever-present roar
+  const hood = c.createOscillator()
+  hood.type = 'sine'
+  hood.frequency.value = 58
+  const hg = c.createGain()
+  hg.gain.value = 0.22
+  hood.connect(hg)
+  hg.connect(g)
+  hood.start()
+
+  // the sizzle: bright highpassed noise, the sound of a pan that never rests
+  const frames = Math.floor(c.sampleRate * 2)
+  const buf = c.createBuffer(1, frames, c.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < frames; i++) d[i] = (Math.random() * 2 - 1) * 0.5
+  const src = c.createBufferSource()
+  src.buffer = buf
+  src.loop = true
+  const hp = c.createBiquadFilter()
+  hp.type = 'highpass'
+  hp.frequency.value = 2600
+  const ng = c.createGain()
+  ng.gain.value = 0.1
+  src.connect(hp)
+  hp.connect(ng)
+  ng.connect(g)
+  src.start()
+
+  // Service noise: pans, plates, a knife on a board. Faster and more varied
+  // than the gym's occasional clank — this kitchen is under pressure.
+  const clatter = () => {
+    const pick = Math.random()
+    if (pick < 0.4) {
+      blip({ freq: 2100 + Math.random() * 900, dur: 0.05, type: 'square', vol: 0.09 })
+      noise({ dur: 0.06, vol: 0.09 })
+    } else if (pick < 0.75) {
+      blip({ freq: 420 + Math.random() * 180, slideTo: 200, dur: 0.14, type: 'triangle', vol: 0.1 })
+    } else {
+      noise({ dur: 0.22, vol: 0.1 })
+    }
+    kitchenClatter = setTimeout(clatter, 1500 + Math.random() * 2800)
+  }
+  kitchenClatter = setTimeout(clatter, 900 + Math.random() * 1400)
+
+  ambience = {
+    g,
+    stop: () => {
+      if (kitchenClatter) {
+        clearTimeout(kitchenClatter)
+        kitchenClatter = null
+      }
+      try { hood.stop() } catch { /* already stopped */ }
+      try { src.stop() } catch { /* already stopped */ }
+    },
+  }
+}
+
+export function kitchenAmbience(on) {
+  if (!enabled) return
+  if (on) startKitchenAmbience()
   else stopAmbience()
 }
 

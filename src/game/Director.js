@@ -41,6 +41,7 @@ export class Director {
     this.foodBuilder = null // { categoryIndex, categories, selections, reaction, done, ... }
     this.songQuiz = null // { rounds, roundIndex, phase, picked, wasCorrect, score, reaction }
     this.framebuffer = null // { kind, puzzle, phase, offset, aligned, fps, reaction, ... }
+    this.kitchen = null // { phase, items, found, step, stepIndex, taps, reaction, ... }
     this.skipCutscenes = false // headless simulation flag
     /**
      * Index of the last beat marked `checkpoint: true`. Dying rewinds the
@@ -67,6 +68,7 @@ export class Director {
     this.foodBuilder = null
     this.songQuiz = null
     this.framebuffer = null
+    this.kitchen = null
     this.checkpointIndex = -1
     if (this.skipCutscenes) {
       // Headless mode: no story, just let the level be playable immediately.
@@ -120,6 +122,7 @@ export class Director {
     this.foodBuilder = null
     this.songQuiz = null
     this.framebuffer = null
+    this.kitchen = null
     this.index = this.checkpointIndex - 1 // advance() pre-increments
     this.advance()
     return true
@@ -243,6 +246,32 @@ export class Director {
     this.game.dirty = true
   }
 
+  // ---- kitchen progression -----------------------------------------------
+  // Fourth instance of the same contract. Note none of these can fail or
+  // punish: picking the LEGO is a valid thing to do, it just gets you
+  // shouted at. The `kitchen` beat decides what that means.
+
+  /** Choose what to cook. Only he can see this screen. */
+  pickDish(id) {
+    if (this.kitchen?.phase !== 'dish' || this.kitchen.confirmText) return
+    this.state.kcDish = id
+    this.game.dirty = true
+  }
+
+  /** Answer the "are you sure?" prompt on a non-biryani dish. */
+  confirmDish(yes) {
+    if (!this.kitchen?.confirmText) return
+    this.state.kcConfirm = !!yes
+    this.game.dirty = true
+  }
+
+  /** Click a jigsaw piece. First click selects, second click swaps. */
+  pickPiece(slot) {
+    if (this.kitchen?.phase !== 'jigsaw') return
+    this.state.kcPiece = slot
+    this.game.dirty = true
+  }
+
   // ---- dev tools ---------------------------------------------------------
 
   /**
@@ -284,6 +313,7 @@ export class Director {
       foodBuilder: this.foodBuilder ? { ...this.foodBuilder } : null,
       songQuiz: this.songQuiz ? { ...this.songQuiz } : null,
       framebuffer: this.framebuffer ? { ...this.framebuffer } : null,
+      kitchen: this.kitchen ? { ...this.kitchen } : null,
       controlEnabled: this.controlEnabled,
       buildAllowed: this.buildAllowed,
       storyDone: this.done,
