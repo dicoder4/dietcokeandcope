@@ -62,22 +62,33 @@ function MonitorHead({ label, caption, status }) {
  */
 function TileGrid({ puzzle, solved }) {
   const order = solved ? puzzle.tiles.map((_, i) => i) : puzzle.scrambled
+  const hasImage = Boolean(puzzle.image)
+
   return (
     <div className={'fb-tiles' + (solved ? ' solved' : '')}>
       {order.map((tileIndex, slot) => {
         const tile = puzzle.tiles[tileIndex]
+        const col = tileIndex % 3
+        const row = Math.floor(tileIndex / 3)
+
+        const style = {
+          transform: solved ? 'rotate(0deg)' : 'rotate(180deg)',
+          transitionDelay: `${slot * 0.05}s`,
+        }
+
+        if (hasImage) {
+          style.backgroundImage = `url(${puzzle.image})`
+          style.backgroundSize = '300% 300%'
+          style.backgroundPosition = `${col * 50}% ${row * 50}%`
+          style.backgroundRepeat = 'no-repeat'
+        } else {
+          style.background = tile.bg
+          style.color = tile.fg
+        }
+
         return (
-          <div
-            className="fb-tile"
-            key={slot}
-            style={{
-              background: tile.bg,
-              color: tile.fg,
-              transform: solved ? 'rotate(0deg)' : 'rotate(180deg)',
-              transitionDelay: `${slot * 0.05}s`,
-            }}
-          >
-            <span className="fb-tile-glyph">{tile.glyph}</span>
+          <div className="fb-tile" key={slot} style={style}>
+            {!hasImage && <span className="fb-tile-glyph">{tile.glyph}</span>}
           </div>
         )
       })}
@@ -249,6 +260,8 @@ function StripStack({ puzzle, offset, aligned, fps }) {
   const blur = aligned ? 0 : Math.min(4, err * 0.06)
   const vibrating = fps != null && fps >= 999999
   const stuttering = fps === 1
+  const hasImage = Boolean(puzzle.image)
+  const numStrips = puzzle.strips.length
 
   return (
     <div
@@ -259,19 +272,27 @@ function StripStack({ puzzle, offset, aligned, fps }) {
         (stuttering ? ' stuttering' : '')
       }
     >
-      {puzzle.strips.map((s, i) => (
-        <div
-          className="fb-strip"
-          key={i}
-          style={{
-            background: s.bg,
-            transform: `translateX(${(offset - target) * s.shear}px)`,
-            filter: blur ? `blur(${blur}px)` : 'none',
-          }}
-        >
-          <span className="fb-strip-glyph">{s.glyph}</span>
-        </div>
-      ))}
+      {puzzle.strips.map((s, i) => {
+        const style = {
+          transform: `translateX(${(offset - target) * s.shear}px)`,
+          filter: blur ? `blur(${blur}px)` : 'none',
+        }
+
+        if (hasImage) {
+          style.backgroundImage = `url(${puzzle.image})`
+          style.backgroundSize = `100% ${numStrips * 100}%`
+          style.backgroundPosition = `0% ${numStrips > 1 ? (i * 100) / (numStrips - 1) : 0}%`
+          style.backgroundRepeat = 'no-repeat'
+        } else {
+          style.background = s.bg
+        }
+
+        return (
+          <div className="fb-strip" key={i} style={style}>
+            {!hasImage && <span className="fb-strip-glyph">{s.glyph}</span>}
+          </div>
+        )
+      })}
       {aligned && <div className="fb-aligned-chip">✓ ALIGNED</div>}
     </div>
   )
@@ -287,10 +308,10 @@ function DunphyPanel({ fb, onOffset, onFps }) {
         <div className="sq-title">🧠 ALIGN MODERN FAMILY</div>
         <div className="sq-sub">
           {solved
-            ? 'Buttery. Phil has never looked smoother.'
+            ? 'Buttery. They have never looked smoother.'
             : fb.aligned
               ? 'Now pick a frame rate.'
-              : 'Phil is on the ladder again · Slide the strips flush.'}
+              : 'Phil and Cam are ready to rock · Slide the strips flush.'}
         </div>
       </div>
 
