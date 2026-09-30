@@ -644,7 +644,7 @@ export function playSynthSong(name, seconds = 8) {
  * called so the caller can fall back to a synth melody. A wrong filename in
  * songs.js costs the joke, never the game.
  */
-export function playClip(url, { seconds = 8, onMissing } = {}) {
+export function playClip(url, { seconds = 8, startAt = null, onMissing } = {}) {
   const c = ensure()
   const handle = { stop() { handle._stopped = true } }
   if (!c || !enabled) {
@@ -666,9 +666,29 @@ export function playClip(url, { seconds = 8, onMissing } = {}) {
       g.gain.value = 0.9
       src.connect(g)
       g.connect(master)
-      // Start somewhere in the middle so repeat plays aren't identical, but
-      // never so late that the clip runs out before the timer does.
-      const offset = Math.max(0, Math.min(audio.duration - seconds, Math.random() * audio.duration * 0.5))
+      /**
+       * Where in the track to start.
+       *
+       * A round can pin this with `startAt` — necessary for a full-length
+       * song, where a random offset would usually land on an intro or an
+       * outro rather than the part anyone would recognise.
+       *
+       * Otherwise pick randomly so repeat plays differ, but stay inside the
+       * middle of the track: the first and last eighth of a song are the
+       * least identifiable part of it. A clip already trimmed to a few
+       * seconds just plays from the top, since there is nowhere to move to.
+       */
+      const latest = Math.max(0, audio.duration - seconds)
+      let offset
+      if (startAt != null) {
+        offset = Math.min(startAt, latest)
+      } else if (latest < 1) {
+        offset = 0
+      } else {
+        const lo = audio.duration * 0.125
+        const hi = Math.min(latest, audio.duration * 0.875)
+        offset = hi > lo ? lo + Math.random() * (hi - lo) : latest * Math.random()
+      }
       src.start(0, offset)
       currentClip = { src, g }
       handle.stop = () => {
@@ -703,9 +723,52 @@ export function stopAllClips() {
 const MUSIC_MODE_BPM = 124
 export const MUSIC_MODE_BEAT = 60 / MUSIC_MODE_BPM
 
-export function startMusicMode() {
+/**
+ * Start music mode, optionally with a real track.
+ *
+ * `track` is a path under public/ (e.g. the song from the quiz's last round).
+ * Level 2 ends with him putting the pink earphones in and listening to the
+ * song he just guessed, so hearing the actual record — not a synth pastiche —
+ * is the entire payoff. If the file is missing or unplayable the synth loop
+ * below takes over, exactly as it does in the quiz.
+ *
+ * `startAt` is how many seconds into the file to begin. The quiz plays a
+ * song's opening as a puzzle; the ending wants the part you'd actually sing
+ * along to, so it drops in at the chorus instead.
+ */
+export function startMusicMode(track = null, startAt = 0) {
   const c = ensure()
   if (!c || !enabled || musicLoop) return
+
+  if (track) {
+    let usedFallback = false
+    const clip = playClip(track, {
+      seconds: 90, // long enough to cover the outro; the level ends first
+      // Where to drop into the track. The ending wants the chorus, not the
+      // intro — nobody wants a scene to end on a song's quiet first bars.
+      startAt,
+      onMissing: () => {
+        usedFallback = true
+        startSynthMusicLoop()
+      },
+    })
+    // Hold the handle so stopMusicMode() can cut it.
+    musicLoop = {
+      id: null,
+      stop() {
+        clip.stop()
+        if (usedFallback) stopSynthMusicLoop()
+      },
+    }
+    return
+  }
+
+  startSynthMusicLoop()
+}
+
+function startSynthMusicLoop() {
+  const c = ensure()
+  if (!c || !enabled) return
   const beat = MUSIC_MODE_BEAT
   const melody = [659, 784, 880, 784, 659, 587, 659, 880, 1047, 880, 784, 659, 587, 659, 784, 587]
   const bass = [110, 110, 165, 110, 147, 147, 196, 147]
@@ -727,10 +790,19 @@ export function startMusicMode() {
   tick()
 }
 
+function stopSynthMusicLoop() {
+  if (!musicLoop) return
+  if (musicLoop.id) clearInterval(musicLoop.id)
+  musicLoop = null
+}
+
 export function stopMusicMode() {
   if (!musicLoop) return
-  clearInterval(musicLoop.id)
+  // A real track carries its own stop(); the synth loop is an interval.
+  const loop = musicLoop
   musicLoop = null
+  if (loop.stop) loop.stop()
+  else if (loop.id) clearInterval(loop.id)
 }
 
 /** Tear down every long-running sound. Called when a level unloads. */

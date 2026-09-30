@@ -11,11 +11,14 @@ import { characterOf } from '../game/Characters.js'
  *
  * Three phases, one per screen:
  *   playing   — equaliser bars + a countdown while the clip runs
- *   answering — the four choices, A-D
+ *   answering — the lettered choices
  *   result    — ✓ / ✗ and whatever Diya has to say about it
+ *
+ * A round may carry any number of choices; the letters are generated rather
+ * than hardcoded so adding a fifth option is purely a data change.
  */
 
-const LETTERS = ['A', 'B', 'C', 'D']
+const letterFor = (i) => String.fromCodePoint(65 + i)
 
 /** Diya's line, styled to match Anisha's in the shawarma builder. */
 function FriendLine({ text, who = 'diya' }) {
@@ -54,7 +57,8 @@ function PlayingPanel({ round, onReplay }) {
     <>
       <div className="sq-head">
         <div className="sq-title">🎧 GUESS THE SONG</div>
-        <div className="sq-sub">Listen…</div>
+        {/* A round can announce itself — the Swiftie round uses this. */}
+        <div className="sq-sub">{round.title ?? 'Listen…'}</div>
       </div>
 
       <Equalizer />
@@ -75,7 +79,7 @@ function AnsweringPanel({ round, onPick }) {
     <>
       <div className="sq-head">
         <div className="sq-title">🎧 GUESS THE SONG</div>
-        <div className="sq-sub">Which one was it?</div>
+        <div className="sq-sub">{round.title ?? 'Which one was it?'}</div>
       </div>
 
       <div className="sq-choices">
@@ -87,7 +91,7 @@ function AnsweringPanel({ round, onPick }) {
             onClick={() => onPick(i)}
             style={{ animationDelay: `${i * 0.06}s` }}
           >
-            <span className="sq-letter">{LETTERS[i]}</span>
+            <span className="sq-letter">{letterFor(i)}</span>
             <span className="sq-choice-label">{c.label}</span>
             <span className="sq-key">{i + 1}</span>
           </button>
@@ -97,9 +101,8 @@ function AnsweringPanel({ round, onPick }) {
   )
 }
 
-function ResultPanel({ round, quiz }) {
+function ResultPanel({ quiz }) {
   const right = quiz.wasCorrect
-  const answer = round.choices.find((c) => c.id === round.correct)
   return (
     <>
       <div className="sq-head">
@@ -109,7 +112,9 @@ function ResultPanel({ round, quiz }) {
         {right ? (
           <div className="sq-xp">+10 MUSIC XP</div>
         ) : (
-          <div className="sq-sub">It was {answer?.label}.</div>
+          // Never name the answer: a wrong guess replays this same round,
+          // so printing it here would hand him the next attempt for free.
+          <div className="sq-sub">Again.</div>
         )}
       </div>
 
@@ -144,7 +149,7 @@ export default function SongQuiz({ quiz, onPick, onReplay }) {
         <div className="sq-body">
           {phase === 'playing' && <PlayingPanel round={round} onReplay={onReplay} />}
           {phase === 'answering' && <AnsweringPanel round={round} onPick={onPick} />}
-          {phase === 'result' && <ResultPanel round={round} quiz={quiz} />}
+          {phase === 'result' && <ResultPanel quiz={quiz} />}
         </div>
       </div>
     </div>

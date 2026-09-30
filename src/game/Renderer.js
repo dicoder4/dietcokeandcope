@@ -2156,14 +2156,22 @@ export function render(ctx, world, view, state) {
     if (gl.reached || gl.hidden) continue
     const bob = Math.sin(gl.bob) * 5
     const p = Camera.project(gl.x + 0.5, gl.y + 1)
-    // beacon
-    ctx.save()
-    const bg = ctx.createLinearGradient(p.x, p.y - 400, p.x, p.y)
-    bg.addColorStop(0, 'rgba(255,214,102,0)')
-    bg.addColorStop(1, 'rgba(255,214,102,0.22)')
-    ctx.fillStyle = bg
-    ctx.fillRect(p.x - 16, p.y - 400, 32, 400)
-    ctx.restore()
+    /**
+     * The beacon: a shaft of light marking something you have to walk to.
+     *
+     * A goal can switch it off with `beacon: false` — Level 2's headphones
+     * turn up at his feet the instant the last song is won, so there is
+     * nothing to guide anyone toward and a spotlight just looks odd indoors.
+     */
+    if (gl.beacon !== false) {
+      ctx.save()
+      const bg = ctx.createLinearGradient(p.x, p.y - 400, p.x, p.y)
+      bg.addColorStop(0, 'rgba(255,214,102,0)')
+      bg.addColorStop(1, 'rgba(255,214,102,0.22)')
+      ctx.fillStyle = bg
+      ctx.fillRect(p.x - 16, p.y - 400, 32, 400)
+      ctx.restore()
+    }
     drawShadowBlob(ctx, world, gl.x, gl.y)
     /**
      * A goal can carry a real photo instead of an emoji (`image:` on the

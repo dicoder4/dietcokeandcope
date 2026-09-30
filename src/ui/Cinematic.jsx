@@ -79,6 +79,7 @@ export default function Cinematic({ cinematic }) {
           <div className="cin-next-sub">{subtitle}</div>
         </div>
       )}
+
     </div>
   )
 }

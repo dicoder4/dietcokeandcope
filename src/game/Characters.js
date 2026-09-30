@@ -84,7 +84,15 @@ export function drawCharacter(ctx, charId, x, y, pose = {}) {
   const p = Camera.project(x, y)
   const cx = p.x + TILE_W * 0.5 + TILE_H * SKEW * 0.5
   const feetY = p.y + TILE_H
-  const bodyH = TILE_H * 1.55 * (1 - squash * 0.28)
+  /**
+   * Per-character height. `height` on a CAST entry scales the whole figure
+   * about its FEET, so a shorter character still stands on the floor rather
+   * than hovering or sinking into it — everything below is measured upward
+   * from feetY. Width is left alone: scaling both would read as "far away"
+   * instead of "shorter".
+   */
+  const scale = c.height ?? 1
+  const bodyH = TILE_H * 1.55 * scale * (1 - squash * 0.28)
   const bodyW = TILE_W * 0.62 * (1 + squash * 0.2)
 
   ctx.save()
@@ -163,12 +171,15 @@ export function drawCharacter(ctx, charId, x, y, pose = {}) {
   // Drawn AFTER the torso and BEFORE the head, so the cable reads as coming
   // out from inside the collar and lying on the shirt front. See
   // drawEarphonesHanging for why this is the whole joke of Level 2.
-  if (accessory === 'earphonesHanging') {
+  if (accessory === 'earphonesHanging' || accessory === 'headphonesAndEarphones') {
     drawEarphonesHanging(ctx, cx, ty, bodyW, bodyH, bob)
   }
 
   // ---- head ----
-  const hr = bodyW * 0.44
+  // Scaled a little less than the body (sqrt, not linear): real short people
+  // are not scale models, and a fully-shrunk head reads as a distant figure
+  // rather than a shorter one.
+  const hr = bodyW * 0.44 * Math.sqrt(scale)
   const hy = ty - hr * 0.95
   const photo = ensureFace(c.id)
 
@@ -186,8 +197,10 @@ export function drawCharacter(ctx, charId, x, y, pose = {}) {
   }
 
   // ---- the big headphones ----
-  // Level 4's ending. Also over the head, for the same reason.
-  if (accessory === 'headphones') {
+  // Level 4's ending, and the middle of Level 2 — where he wears the cans he
+  // just found while the pink earphones hang round his neck, so the moment he
+  // throws them away reads as a choice between two visible objects.
+  if (accessory === 'headphones' || accessory === 'headphonesAndEarphones') {
     drawHeadphones(ctx, cx, hy, hr, animT)
   }
 
