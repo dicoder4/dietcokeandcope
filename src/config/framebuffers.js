@@ -64,6 +64,7 @@ export const SCRANTON_PUZZLE = {
   kind: 'scranton',
   monitorLabel: 'FRAMEBUFFER 01: SCRANTON_OFFICE.RAW',
   caption: 'M_SCOTT / WORLDS_BEST_BOSS.MUG',
+  image: '/shows/the_office.png',
 
   tiles: [
     // top row — strip lights and the branch wall
@@ -142,6 +143,7 @@ export const DUNPHY_PUZZLE = {
   kind: 'dunphy',
   monitorLabel: 'FRAMEBUFFER 02: DUNPHY_CHAOS.RAW',
   caption: 'P_DUNPHY / LADDER_INCIDENT.MOV',
+  image: '/shows/modern_family.png',
 
   strips: [
     { bg: '#b89a6a', glyph: '🪜', shear: 1.0 },

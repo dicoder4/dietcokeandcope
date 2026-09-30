@@ -265,7 +265,7 @@ const level3 = {
     // ---- PUZZLE 2: MODERN FAMILY ----------------------------------------
     { t: 'say', who: 'lord', text: 'Okay okay…' },
     { t: 'say', who: 'lord', text: "Now let's fix the frame rate and alignment on this one!" },
-    { t: 'say', who: 'lord', text: 'Phil got on a ladder again. Claire is NOT helping.' },
+    { t: 'say', who: 'lord', text: 'Phil and Cam are upto something hmmmm...' },
     { t: 'react', who: 'player', reaction: 'concentration' },
     { t: 'framebuffer', puzzle: DUNPHY_PUZZLE, solvedHold: 2.6 },
     { t: 'react', who: 'player', reaction: 'excited' },
