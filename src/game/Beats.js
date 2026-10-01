@@ -1142,7 +1142,7 @@ export const BEATS = {
         order = Array.from({ length: count }, (_, i) => i)
         for (let i = count - 1; i > 0; i--) {
           const j = nextRand(i + 1)
-          ;[order[i], order[j]] = [order[j], order[i]]
+            ;[order[i], order[j]] = [order[j], order[i]]
         }
         if (order.some((piece, i) => piece !== i)) break
       }
@@ -1222,7 +1222,7 @@ export const BEATS = {
             k.selected = null // clicking the same piece deselects
           } else {
             const order = [...k.order]
-            ;[order[k.selected], order[slot]] = [order[slot], order[k.selected]]
+              ;[order[k.selected], order[slot]] = [order[slot], order[k.selected]]
             k.order = order
             k.selected = null
             k.moves += 1
@@ -1359,4 +1359,19 @@ export const BEATS = {
       dir.cinematic = null
     },
   },
+
+  /** level5Montage — trigger Level 5 Real Photo Montage & Emotional Conclusion. */
+  level5Montage: {
+    enter(dir) {
+      dir.controlEnabled = false
+      dir.level5Montage = true
+    },
+    update() {
+      return false // Holds until montage completes or user restarts
+    },
+    exit(dir) {
+      dir.level5Montage = false
+    },
+  },
 }
+

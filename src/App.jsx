@@ -10,6 +10,7 @@ import FoodBuilder from './ui/FoodBuilder.jsx'
 import SongQuiz from './ui/SongQuiz.jsx'
 import Framebuffer from './ui/Framebuffer.jsx'
 import Kitchen from './ui/Kitchen.jsx'
+import Level5Montage from './ui/Level5Montage.jsx'
 /**
  * The dev panel is excluded from production builds at the MODULE level, not
  * merely hidden behind a runtime flag. `import.meta.env.DEV` written bare
@@ -353,6 +354,11 @@ export default function App() {
         />
       )}
 
+      {/* Level 5 Real Photo Montage & Emotional Ending */}
+      {state?.level5Montage && (
+        <Level5Montage onRestart={restartToMenu} />
+      )}
+
       {/* achievement pop-ups */}
       <div className="achv">
         {achievements.map((a) => (
@@ -385,30 +391,30 @@ export default function App() {
       {/* dev tools — DevPanel is null in production, so this never renders */}
       {devOpen && DevPanel && (
         <React.Suspense fallback={null}>
-        <DevPanel
-          state={state}
-          onGotoLevel={(i) => {
-            const g = gameRef.current
-            if (!g) return
-            setComplete(null)
-            setOutro(false)
-            setUnlocked((u) => Math.max(u, i))
-            g.devGotoLevel(i)
-          }}
-          onSkipMission={(i) => gameRef.current?.devSkipToMission(i)}
-          onSkipBeat={() => {
-            const g = gameRef.current
-            if (!g) return
-            g.director.devSkipBeat()
-            g.pushState()
-          }}
-          onClose={() => {
-            const g = gameRef.current
-            if (!g) return
-            g.devPanelOpen = false
-            g.setPaused(false)
-          }}
-        />
+          <DevPanel
+            state={state}
+            onGotoLevel={(i) => {
+              const g = gameRef.current
+              if (!g) return
+              setComplete(null)
+              setOutro(false)
+              setUnlocked((u) => Math.max(u, i))
+              g.devGotoLevel(i)
+            }}
+            onSkipMission={(i) => gameRef.current?.devSkipToMission(i)}
+            onSkipBeat={() => {
+              const g = gameRef.current
+              if (!g) return
+              g.director.devSkipBeat()
+              g.pushState()
+            }}
+            onClose={() => {
+              const g = gameRef.current
+              if (!g) return
+              g.devPanelOpen = false
+              g.setPaused(false)
+            }}
+          />
         </React.Suspense>
       )}
     </div>

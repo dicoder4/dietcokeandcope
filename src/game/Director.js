@@ -42,6 +42,7 @@ export class Director {
     this.songQuiz = null // { rounds, roundIndex, phase, picked, wasCorrect, score, reaction }
     this.framebuffer = null // { kind, puzzle, phase, offset, aligned, fps, reaction, ... }
     this.kitchen = null // { phase, items, found, step, stepIndex, taps, reaction, ... }
+    this.level5Montage = false
     this.skipCutscenes = false // headless simulation flag
     /**
      * Index of the last beat marked `checkpoint: true`. Dying rewinds the
@@ -69,6 +70,7 @@ export class Director {
     this.songQuiz = null
     this.framebuffer = null
     this.kitchen = null
+    this.level5Montage = false
     this.checkpointIndex = -1
     if (this.skipCutscenes) {
       // Headless mode: no story, just let the level be playable immediately.
@@ -123,6 +125,7 @@ export class Director {
     this.songQuiz = null
     this.framebuffer = null
     this.kitchen = null
+    this.level5Montage = false
     this.index = this.checkpointIndex - 1 // advance() pre-increments
     this.advance()
     return true
@@ -314,6 +317,7 @@ export class Director {
       songQuiz: this.songQuiz ? { ...this.songQuiz } : null,
       framebuffer: this.framebuffer ? { ...this.framebuffer } : null,
       kitchen: this.kitchen ? { ...this.kitchen } : null,
+      level5Montage: this.level5Montage === true,
       controlEnabled: this.controlEnabled,
       buildAllowed: this.buildAllowed,
       storyDone: this.done,

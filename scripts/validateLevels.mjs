@@ -34,10 +34,11 @@ import level1 from '../src/levels/level1.js'
 import level2 from '../src/levels/level2.js'
 import level3 from '../src/levels/level3.js'
 import level4 from '../src/levels/level4.js'
+import level5 from '../src/levels/level5.js'
 import { BLOCK_TYPES, footprint } from '../src/entities/Block.js'
 import { CAST } from '../src/config/gameConfig.js'
 
-const LEVELS = [level1, level2, level3, level4]
+const LEVELS = [level1, level2, level3, level4, level5]
 
 const SOLID = new Set(['#', '=', '|', '_', 'B'])
 const FATAL_FALL = 6
@@ -371,7 +372,7 @@ for (const def of LEVELS) {
         const missing = goals.filter((gl) => !reach.has(key(gl.x, gl.y)))
         fail(
           'reference solution does NOT reach ' +
-            missing.map((m) => m.label + '@' + m.x + ',' + m.y).join(', ')
+          missing.map((m) => m.label + '@' + m.x + ',' + m.y).join(', ')
         )
       } else {
         console.log(
@@ -386,8 +387,8 @@ for (const def of LEVELS) {
       if (unreachable.length) {
         console.log(
           '     ! pickups not on the reference path: ' +
-            unreachable.map((c) => (c.label || c.typeId) + '@' + c.x + ',' + c.y).join(', ') +
-            ' (fine if intentionally optional)'
+          unreachable.map((c) => (c.label || c.typeId) + '@' + c.x + ',' + c.y).join(', ') +
+          ' (fine if intentionally optional)'
         )
       }
 

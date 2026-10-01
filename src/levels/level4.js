@@ -425,11 +425,8 @@ const level4 = {
     { t: 'camera', focus: 'player', zoom: 1.4, dur: 1.8, ease: 0.04 },
     { t: 'camera', focus: { x: 18, y: 8 }, zoom: 0.55, dur: 4.2, ease: 0.025 },
     { t: 'kitchenAmbience', on: false },
-    // Level 5 does not exist yet, so this card HOLDS — the same convention
-    // Levels 1-3 each used while they were the newest level. When the next
-    // level is built, swap `hold: true` for `dur: 3.4` so storyDone fires
-    // and App.jsx loads on.
-    { t: 'nextLocation', icon: '🎂', title: 'THE BIRTHDAY', hold: true },
+    // Level 5 transition: swap hold: true for dur: 3.4 so storyDone fires and Level 5 loads
+    { t: 'nextLocation', icon: '🎂', title: 'THE BIRTHDAY', dur: 3.4 },
   ],
 }
 
