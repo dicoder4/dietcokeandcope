@@ -44,6 +44,13 @@ export const CAST = {
     shirtAlt: '#a83b74',
     pants: '#2c3450',
     longHair: true,
+    /**
+     * Shorter than Aditya. `height` scales the drawn figure about its feet
+     * (see Characters.js) — 1 is the default build, so this is noticeably
+     * shorter without turning her into a child. Purely cosmetic: it does not
+     * touch collision, which is a fixed 2-cell body for everyone.
+     */
+    height: 0.86,
   },
   lord: {
     id: 'lord',

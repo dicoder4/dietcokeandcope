@@ -47,7 +47,16 @@ export class Collectible {
 
 /** The level's actual objective marker. */
 export class Goal {
-  constructor({ x, y, emoji = '⭐', label = 'GOAL', requiresGates = [], hidden = false }) {
+  constructor({
+    x,
+    y,
+    emoji = '⭐',
+    label = 'GOAL',
+    requiresGates = [],
+    hidden = false,
+    image = null,
+    beacon = true,
+  }) {
     this.x = x
     this.y = y
     this.emoji = emoji
@@ -55,6 +64,10 @@ export class Goal {
     this.requiresGates = requiresGates
     /** Same contract as Collectible.hidden — invisible and untouchable. */
     this.hidden = hidden
+    /** Optional photo drawn instead of the emoji (see Renderer). */
+    this.image = image
+    /** false hides the shaft of light — for goals that need no guiding to. */
+    this.beacon = beacon
     this.reached = false
     this.bob = 0
   }

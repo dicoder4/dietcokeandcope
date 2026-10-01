@@ -5,15 +5,31 @@ Drop short audio clips in this folder and the Level 2 music quiz will play them.
 ## Quick version
 
 1. Cut 5–10 seconds out of three songs he'd recognise instantly.
-2. Save them here as `round1.mp3`, `round2.mp3`, `round3.mp3`.
-3. Open `src/config/songs.js` and rewrite the four `choices` and the `correct`
-   id for each round so the answers match your clips.
+2. Save them here with simple names — no spaces or punctuation, since the
+   filename becomes part of a URL.
+3. Open `src/config/songs.js`, point each round's `clip` at its file, and
+   rewrite the `choices` and the `correct` id so the answers match.
 4. Write the taunts. That's where the whole joke lives.
 
-## Formats
+## What's here now
+
+| file | round | answer |
+|------|-------|--------|
+| `round1-chalo-chalein.mp3` | 1 | Chalo Chalein |
+| `round2-just-maath-maathalli.mp3` | 2 | Just Maath Maathalli |
+| `round3-blank-space.mp3` | 3 | Blank Space |
+
+Each round lists five options; only the correct one needs an audio file,
+since only the correct song is ever played.
+
+## Formats and size
 
 Anything a browser can play: `.mp3`, `.m4a`, `.ogg`, `.wav`.
-Keep them short — these load over the network before the round starts.
+
+**Trim them.** The whole file is fetched and decoded before the round can
+start, so a full-length track means a long silent wait. A 7-second clip is
+~100 KB; a full song can be 10 MB+. Rounds only play a few seconds from a
+random offset, so the rest of the file is pure download cost.
 
 ## If a file is missing
 

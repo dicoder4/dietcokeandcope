@@ -2,28 +2,35 @@
  * LEVEL 2 — HEADPHONE CRISIS
  * A Namma Metro carriage, Purple Line, Indiranagar → Majestic.
  *
- * Aditya is on the train with Diya. She asks where his headphones are. He
- * panics. What follows is a three-round guess-the-song interrogation, the
- * discovery of a pair of headphones, and then the actual point: his pink
- * earphones have been looped through his shirt the entire time — visible to
- * the player from the very first frame of the level.
+ * Aditya is on the train with Diya. She asks where his headphones are; he has
+ * genuinely lost them. She makes him earn them back song by song, and when
+ * he finally finds them the game tells him he was worried about the wrong
+ * pair anyway.
  *
- * THE PUNCHLINE IS NOT "those aren't yours". He finds real headphones and
- * they are fine. MISSION FAILED fires because he spent the whole level
- * panicking about the wrong pair — he loves the pink earphones more, and he
- * should have been worried about THEM. The failure is emotional, not
- * logistical. Do not rewrite this into a mix-up gag.
+ * THE STRUCTURE, AND WHY IT IS THIS WAY:
+ *
+ *   1. He starts with NOTHING round his neck. The headphones really are
+ *      lost — `playerAccessory` is deliberately unset, so there is no prop
+ *      on him to contradict the panic. An earlier draft hung the pink
+ *      earphones on him from frame one; that made every line of the search
+ *      read as stupidity rather than comedy.
+ *   2. The quiz is a GATE, not a diversion. A wrong answer replays the same
+ *      round (see the songQuiz beat) — he cannot fail past it, only finish
+ *      it. Getting every song right is what makes the headphones appear.
+ *   3. He finds the headphones. They are his, they are fine, it is a real
+ *      win.
+ *   4. THEN the joke: MISSION FAILED, because the pink earphones are the
+ *      ones he actually loves and he never once asked where THEY were. The
+ *      failure is emotional, not logistical — this is not a mix-up gag and
+ *      nobody says "those aren't yours".
+ *   5. The pink earphones appear on his shirt at that moment (the `earphones`
+ *      beat), because they were in his bag/pocket the whole time — not
+ *      because they were dangling in frame while he searched.
  *
  * DESIGN: this level has no LEGO. Level 1's thesis was "you cannot jump, so
- * you must build"; this one's is "you cannot find what you are wearing". The
- * mechanic is the music quiz, declared via `mechanic: 'story'` so the offline
- * checkers validate it as a walked, scripted level instead of a brick puzzle.
- *
- * THE JOKE ONLY WORKS IF THE EARPHONES ARE VISIBLE. `playerAccessory` is set
- * from frame one (World.build reads it) and never spawned mid-level. Every
- * second the player spends hunting the carriage, the answer is hanging off
- * the protagonist's own shirt. Do not hide them to "preserve the twist" —
- * the twist IS that they were never hidden.
+ * you must build"; this one's is "the thing you miss is the thing you love".
+ * The mechanic is the music quiz, declared via `mechanic: 'story'` so the
+ * offline checkers validate it as a walked, scripted level.
  *
  * Map legend: # terrain (carriage floor), . empty, P player start
  *
@@ -31,7 +38,7 @@
  *   x2       the door he boarded through at Indiranagar
  *   x8-30    the carriage interior — seats, poles, passengers
  *   x18      Diya, waiting
- *   x27      where the headphones turn up (revealed after all three songs)
+ *   x27      where the headphones turn up (revealed after every song is won)
  */
 
 import { SONG_ROUNDS } from '../config/songs.js'
@@ -74,8 +81,9 @@ const level2 = {
   // walks into the metro with his shawarma HP and XP intact. This level only
   // ever awards HAPPINESS and XP — never HP.
 
-  // The pink earphones. Worn, not placed. See the header comment.
-  playerAccessory: 'earphonesHanging',
+  // NO accessory at the start. He has genuinely lost his headphones and is
+  // carrying nothing visible — the pink earphones only come out at the
+  // reveal, via the `earphones` beat. See the header comment.
 
   props: [
     { type: 'metroDoor', x: 3, y: 9 },
@@ -108,7 +116,10 @@ const level2 = {
   // The headphones. Real ones, genuinely his — the gag is not a mix-up.
   // Hidden until all three songs are done, because the search is the reward
   // for the quiz, not a parallel activity.
-  goals: [{ x: 27, y: 9, emoji: '🎧', label: 'HEADPHONES', hidden: true }],
+  // No beacon: they appear at his feet the moment the last song is won, so
+  // there is nothing to guide him toward — and a shaft of light inside a
+  // metro carriage looks like a stage prop.
+  goals: [{ x: 27, y: 9, emoji: '🎧', label: 'HEADPHONES', hidden: true, beacon: false }],
 
   completeTitle: 'MISSION COMPLETE',
   completeMessage: '🎧 HEADPHONE CRISIS',
@@ -162,9 +173,11 @@ const level2 = {
           reply: ['.. issues pah..'],
         },
         {
+          // The panic answer is the correct one. She goes straight to the
+          // disbelief — no intermediate beat.
           text: 'Faaaaack',
           correct: true,
-          reply: 'Wait.',
+          reply: 'WAIT.. YOU ACTUALLY LOST THEM?!?!?',
         },
         {
           text: 'I don’t need headphones',
@@ -173,17 +186,14 @@ const level2 = {
       ],
     },
 
-    // ---- he panics -----------------------------------------------------
+    // ---- he has no idea where they are ---------------------------------
     { t: 'react', who: 'diya', reaction: 'surprised' },
     { t: 'sting', kind: 'comedicFail', shake: 0.3 },
-    { t: 'say', who: 'diya', text: 'WAIT… YOU ACTUALLY LOST THEM?!' },
     { t: 'react', who: 'player', reaction: 'panic' },
-    { t: 'say', who: 'player', text: 'I— maybe?' },
-    { t: 'say', who: 'player', text: 'Faaaaack.' },
+    { t: 'say', who: 'player', text: 'BRO.. where tff are they' },
     { t: 'react', who: 'diya', reaction: null },
 
     // the idea
-    { t: 'say', who: 'diya', text: 'Wait wait wait…' },
     { t: 'react', who: 'diya', reaction: 'excited' },
     { t: 'say', who: 'diya', text: 'Guess the song brooo.' },
     { t: 'say', who: 'player', text: 'That’s not going to find my headphones.' },
@@ -193,8 +203,10 @@ const level2 = {
     { t: 'cameraRelease' },
 
     // ---- THE MINIGAME --------------------------------------------------
-    // Three rounds, all inside one beat. Wrong answers are free — the
-    // rounds always advance. See src/config/songs.js to swap the songs.
+    // Every round must be won. A wrong answer replays the same song (see the
+    // songQuiz beat) — the headphones are the prize for getting them ALL
+    // right, so this beat cannot be failed past, only finished.
+    // See src/config/songs.js to swap the songs.
     {
       t: 'mission',
       icon: '🎵',
@@ -212,106 +224,129 @@ const level2 = {
     { t: 'say', who: 'diya', text: 'You’re still a music head.' },
     { t: 'react', who: 'diya', reaction: null },
     { t: 'wait', dur: 0.8 },
-    { t: 'react', who: 'diya', reaction: 'surprised' },
-    { t: 'say', who: 'diya', text: 'But WHERE ARE YOUR HEADPHONES?' },
-    { t: 'react', who: 'diya', reaction: null },
-    { t: 'react', who: 'player', reaction: 'realization' },
-    { t: 'say', who: 'player', text: 'Oh. Right.' },
+    // Winning the last song is what makes him look down — no hunt required.
+    { t: 'react', who: 'player', reaction: 'surprised' },
+    { t: 'say', who: 'player', text: 'wait— they were under the seat this whole time.' },
     { t: 'react', who: 'player', reaction: null },
     { t: 'cameraRelease' },
     { t: 'metroAmbience', on: true },
 
-    // ---- the search ----------------------------------------------------
-    // All three songs are done, so the headphones turn up. The search is
-    // short on purpose: the brief says the physical hunt is not the level.
-    {
-      t: 'mission',
-      icon: '🎧',
-      title: 'FIND YOUR HEADPHONES',
-      text: 'Look around the carriage.',
-      dur: 2.4,
-      control: true,
-      checkpoint: true,
-    },
-    { t: 'reveal', labels: ['HEADPHONES'] },
-    { t: 'npcWalk', id: 'diya', to: 22, face: 1, wait: false },
-    { t: 'waitFor', cond: 'goalReached', id: 'HEADPHONES' },
-
     // ---- THE VICTORY ----------------------------------------------------
-    // Played completely straight, and it IS a real victory — he found them.
-    // The failure that follows is about which pair he was panicking over.
+    // No hunt. Winning the songs IS finding them: the headphones were under
+    // the seat the whole time and the last correct answer is what makes him
+    // look down. Played completely straight — it is a real win.
     { t: 'control', on: false },
+    { t: 'reveal', labels: ['HEADPHONES'] },
     { t: 'sting', kind: 'dramaticVictory', shake: 0.4 },
     { t: 'camera', focus: 'player', zoom: 1.7, dur: 1.0 },
     { t: 'react', who: 'player', reaction: 'victory' },
     { t: 'particles', color: '#ffd166', count: 46, spread: 2.6 },
     { t: 'banner', lines: ['🎧 HEADPHONES FOUND!'], sub: 'AGAINST ALL ODDS', kind: 'good', dur: 2.8 },
+    // He puts them straight on, and wears them for the rest of the scene —
+    // right up until he throws them away. Seeing them on his head is what
+    // makes the discard land as a choice rather than a line of text.
+    { t: 'earphones', who: 'player', state: 'headphones' },
     { t: 'react', who: 'diya', reaction: 'excited' },
     { t: 'say', who: 'diya', text: 'LESGOOOOOO!' },
     { t: 'react', who: 'diya', reaction: null },
     { t: 'react', who: 'player', reaction: null },
 
-    // ---- MISSION FAILED --------------------------------------------------
-    // Not a mix-up. He found headphones and they are his. The game fails him
-    // because he spent the entire level panicking about the wrong pair —
-    // the pink earphones were the ones that mattered, and they were on him.
+    // ---- THE ACTUAL QUESTION ---------------------------------------------
+    // He is holding his headphones and he is happy. Diya asks the one
+    // question he has not thought about once this entire level.
     { t: 'wait', dur: 1.1 },
     { t: 'react', who: 'diya', reaction: 'deadpan' },
     { t: 'say', who: 'diya', text: '…bro.' },
-    { t: 'say', who: 'player', text: 'What?' },
-    { t: 'wait', dur: 0.7 },
+    { t: 'say', who: 'player', text: 'What? I found them!' },
+    { t: 'wait', dur: 0.6 },
+    { t: 'say', who: 'diya', text: 'and your pink earphones?' },
 
-    { t: 'sting', kind: 'comedicFail', shake: 0.25 },
-    {
-      t: 'banner',
-      lines: ['MISSION FAILED'],
-      sub: 'we know you love your pink earphones more',
-      kind: 'bad',
-      dur: 3.2,
-      sound: false,
-    },
-    {
-      t: 'banner',
-      lines: ['YOU SHOULD’VE BEEN WORRIED ABOUT THEM!'],
-      sub: '',
-      kind: 'bad',
-      dur: 2.8,
-      sound: false,
-    },
-
-    // ---- THE REVEAL ------------------------------------------------------
-    // The camera finally looks at him properly. The pink cable has been
-    // drawn on his shirt since the first frame of the level; this is just
-    // the moment anyone bothers to look at it.
+    // ---- FULL PANIC -------------------------------------------------------
+    // The headphones were an inconvenience. THIS is a crisis. He completely
+    // loses it — and the length of this is the joke: he never came close to
+    // caring this much about the pair he spent the whole level hunting.
+    { t: 'sting', kind: 'comedicFail', shake: 0.35 },
     { t: 'metroAmbience', on: false },
-    { t: 'camera', focus: 'player', zoom: 2.6, dur: 1.8, ease: 0.04 },
-    { t: 'wait', dur: 1.4 }, // silence
-    { t: 'react', who: 'player', reaction: 'realization' },
-    { t: 'wait', dur: 0.8 },
-    { t: 'say', who: 'player', text: '…oh.' },
-
-    { t: 'react', who: 'diya', reaction: 'surprised' },
-    { t: 'say', who: 'diya', text: 'YOU HAD THEM THE WHOLE TIME.' },
-    { t: 'react', who: 'player', reaction: 'embarrassed' },
-    { t: 'say', who: 'player', text: 'They were in my shirt.' },
+    { t: 'react', who: 'player', reaction: 'panic' },
+    { t: 'say', who: 'player', text: 'MY WHAT' },
+    { t: 'camera', focus: 'player', zoom: 2.2, dur: 0.8, ease: 0.05 },
+    { t: 'say', who: 'player', text: 'NO NO NO NO NO' },
+    { t: 'react', who: 'player', reaction: 'surprised', shake: 0.3 },
+    { t: 'say', who: 'player', text: 'WHERE ARE THEY' },
+    { t: 'say', who: 'player', text: 'DIYA WHERE ARE THEY' },
     { t: 'react', who: 'diya', reaction: 'deadpan' },
+    { t: 'say', who: 'diya', text: 'i’m not the one who had them.' },
+    { t: 'react', who: 'player', reaction: 'panic', shake: 0.25 },
+    { t: 'say', who: 'player', text: 'NOT THE PINK ONES PLEASE NOT THE PINK ONES' },
 
-    // the long comedic pause — nobody says anything, the train just moves
-    { t: 'wait', dur: 2.6 },
-    { t: 'say', who: 'diya', text: 'Bro.' },
-    { t: 'wait', dur: 1.0 },
+    // ---- FOUND — IN HIS SHIRT ---------------------------------------------
+    // Mid-meltdown he pats himself down and they are right there, looped
+    // through his own shirt. They appear HERE, not at level start: nothing
+    // was ever dangling in frame to contradict the panic.
+    { t: 'camera', focus: 'player', zoom: 2.7, dur: 1.2, ease: 0.045 },
+    { t: 'wait', dur: 0.7 }, // silence
+    { t: 'react', who: 'player', reaction: 'realization' },
+    { t: 'say', who: 'player', text: '…wait.' },
+    // Both at once: the cans still on his head, the pink pair now hanging
+    // from his shirt. Diya's next line needs to point at a visible choice.
+    { t: 'earphones', who: 'player', state: 'headphonesAndEarphones' },
+    { t: 'particles', color: '#ff5fa2', count: 34, spread: 1.6 },
+    { t: 'sting', kind: 'dramaticVictory', shake: 0.3 },
+    { t: 'banner', lines: ['🎀 PINK EARPHONES'], sub: 'IN HIS SHIRT. THE ENTIRE TIME.', kind: 'good', dur: 2.8, sound: false },
+    { t: 'react', who: 'player', reaction: 'happy' },
+    { t: 'say', who: 'player', text: '…oh thank god.' },
+
+    // ---- CAUGHT -----------------------------------------------------------
+    { t: 'wait', dur: 0.8 },
+    { t: 'react', who: 'diya', reaction: 'deadpan' },
+    { t: 'say', who: 'diya', text: 'wow. so you clearly like THESE more.' },
+    { t: 'react', who: 'player', reaction: 'embarrassed' },
+    { t: 'wait', dur: 1.2 }, // he says nothing, which says everything
+    { t: 'say', who: 'player', text: '…' },
+    { t: 'say', who: 'diya', text: 'yeah. that’s what I thought.' },
     { t: 'react', who: 'diya', reaction: null },
-    { t: 'react', who: 'player', reaction: null },
+
+    // ---- THE VERDICT ------------------------------------------------------
+    // He answers by throwing the headphones away and putting the pink ones
+    // in. No argument, no defence — just the action.
+    { t: 'wait', dur: 0.6 },
+    // The cans come OFF — this is the beat the whole scene has been building
+    // to, so it gets its own moment before the pink ones go in.
+    { t: 'earphones', who: 'player', state: 'earphonesHanging' },
+    { t: 'sting', kind: 'comedicFail', shake: 0.2 },
+    { t: 'particles', color: '#8a93a6', count: 18, spread: 2.2 },
+    { t: 'banner', lines: ['🎧 HEADPHONES DISCARDED'], sub: 'he did not even hesitate', kind: 'bad', dur: 2.4, sound: false },
+    { t: 'react', who: 'player', reaction: 'embarrassed' },
 
     // ---- MUSIC RESTORED --------------------------------------------------
     { t: 'earphones', who: 'player', state: 'earphonesWorn' },
     { t: 'wait', dur: 0.6 },
-    { t: 'musicMode', on: true, dur: 0.8 },
+    // The actual record, not the synth loop — he ends the level listening to
+    // the song he just guessed. Falls back to the synth if the file is gone.
+    // `trackStart` drops in at the chorus (~0:55) rather than the intro: the
+    // quiz already used the opening, and the scene should end on the part
+    // he'd actually be mouthing along to.
+    {
+      t: 'musicMode',
+      on: true,
+      dur: 0.8,
+      track: 'songs/round3-blank-space.mp3',
+      trackStart: 55,
+    },
     { t: 'react', who: 'player', reaction: 'happy' },
     { t: 'cameraRelease' },
     { t: 'camera', focus: { x: 20, y: 8 }, zoom: 0.85, dur: 2.4, ease: 0.04 },
-    { t: 'banner', lines: ['🎵 MUSIC RESTORED'], sub: '', kind: 'good', dur: 2.4, sound: false },
+    { t: 'banner', lines: ['🎵 MUSIC RESTORED'], sub: 'NOW PLAYING — BLANK SPACE', kind: 'good', dur: 2.6, sound: false },
     { t: 'particles', color: '#ff5fa2', count: 50, spread: 3 },
+
+    // He is gone — earphones in, Taylor on, entirely elsewhere. He does not
+    // speak again. Two lines from Diya and the scene is over.
+    { t: 'wait', dur: 1.6 },
+    { t: 'react', who: 'diya', reaction: 'deadpan' },
+    { t: 'say', who: 'diya', text: 'ofc.' },
+    { t: 'wait', dur: 1.0 },
+    { t: 'say', who: 'diya', text: '*sigh*' },
+    { t: 'react', who: 'diya', reaction: null },
 
     // HAPPINESS ONLY. HP is deliberately untouched this level.
     {
@@ -322,10 +357,6 @@ const level2 = {
       sub: '+HAPPINESS',
       dur: 2.8,
     },
-
-    { t: 'say', who: 'diya', text: 'There he is.', reaction: 'happy' },
-    { t: 'react', who: 'diya', reaction: null },
-    { t: 'react', who: 'player', reaction: null },
 
     {
       t: 'mission',
@@ -343,9 +374,10 @@ const level2 = {
   // hold: without a `dur` the beat never completes, `storyDone` never fires,
   // and App.jsx never loads the gym. Same change Level 1 made the moment
   // this level was built.
+  // Nobody speaks. The sigh was the last line of the scene, so the outro is
+  // just the camera pulling back off the two of them, music still going.
   outroBeats: [
-    { t: 'camera', focus: { x: 18, y: 8 }, zoom: 0.6, dur: 3.2, ease: 0.03 },
-    { t: 'say', who: 'diya', text: 'Okay. Majestic next.', auto: true, dur: 2.0 },
+    { t: 'camera', focus: { x: 18, y: 8 }, zoom: 0.6, dur: 3.6, ease: 0.03 },
     { t: 'nextLocation', icon: '🏋️', title: 'THE GYM', dur: 3.4 },
   ],
 }

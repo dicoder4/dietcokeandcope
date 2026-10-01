@@ -96,6 +96,7 @@ function startRoundAudio(round) {
   let fallback = null
   const clip = playClip(round.clip, {
     seconds,
+    startAt: round.startAt ?? null,
     onMissing: () => {
       fallback = playSynthSong(round.synth, seconds)
     },
@@ -760,15 +761,38 @@ export const BEATS = {
         return false
       }
 
-      // result — hold on the verdict, then roll on regardless of the answer
+      /**
+       * result — hold on the verdict, then move.
+       *
+       * A WRONG answer replays the same round: the headphones are the prize
+       * for getting every song right, so the quiz cannot be failed past, only
+       * finished. Diya's taunt lands, the clip comes back, and he tries
+       * again. Only a correct answer advances.
+       */
       if (q.phase === 'result') {
         if (elapsed < (beat.resultHold ?? 2.6)) return false
+
+        if (!q.wasCorrect) {
+          // same round again — replay the clip from the top of the phase
+          q.phase = 'playing'
+          q.picked = null
+          q.wasCorrect = null
+          q.reaction = null
+          q.attempts = (q.attempts ?? 0) + 1
+          st.phaseStart = st.t
+          st.audio = startRoundAudio(round)
+          dir.songQuiz = { ...q }
+          game.dirty = true
+          return false
+        }
+
         if (q.roundIndex + 1 >= q.rounds.length) return true
         q.roundIndex += 1
         q.phase = 'playing'
         q.picked = null
         q.wasCorrect = null
         q.reaction = null
+        q.attempts = 0
         st.phaseStart = st.t
         st.audio = startRoundAudio(q.rounds[q.roundIndex])
         dir.songQuiz = { ...q }
@@ -1281,19 +1305,24 @@ export const BEATS = {
   },
 
   /**
-   * earphones — move the pink earphones between hanging and worn.
+   * earphones — put the pink earphones on the character, or change how they
+   * are being worn. States: 'earphonesHanging' (round the neck, looped
+   * through the shirt) and 'earphonesWorn' (in his ears, music playing).
    *
-   * They are NOT a world item. They are drawn on the character from the
-   * first frame of the level (see Characters.js), looped through his shirt,
-   * which is the entire setup for the punchline. This beat only changes how
-   * they are worn, never whether they exist.
+   * They are NOT a world item to be walked into — they are drawn directly on
+   * the character (see Characters.js). In Level 2 he starts with NO accessory
+   * at all, because his headphones are genuinely lost; this beat is what
+   * produces the pink pair at the reveal. Pass `sound: false` for a silent
+   * change.
    */
   earphones: {
     enter(dir, beat, game) {
       const who = beat.who ?? 'player'
       const target = who === 'player' ? game.world.player : findNpc(game, who)
       if (target) target.accessory = beat.state ?? 'earphonesWorn'
-      if (beat.state === 'earphonesWorn') sfx.pickup()
+      // Both transitions are moments: finding them in his pocket, and
+      // putting them in. Silence on either would undersell it.
+      if (beat.sound !== false) sfx.pickup()
       game.dirty = true
     },
   },
@@ -1310,7 +1339,10 @@ export const BEATS = {
       game.world.musicStart = game.now
       if (on) {
         unduck(0.3)
-        startMusicMode()
+        // `track` plays a real file (Level 2 ends on the song he just
+        // guessed); without it, the synth loop plays. `trackStart` picks the
+        // moment to drop in — the chorus, not the intro.
+        startMusicMode(beat.track ?? null, beat.trackStart ?? 0)
         game.world.camera.kick(0.25)
         game.world.spawnParticles(
           game.world.player.x,
@@ -1333,6 +1365,7 @@ export const BEATS = {
       game.completeLevel(beat)
     },
   },
+
 
   /**
    * nextLocation — the "NEXT LOCATION… 🎧 MUSIC DISTRICT" teaser card.
