@@ -354,9 +354,9 @@ export default function App() {
         />
       )}
 
-      {/* Level 5 Real Photo Montage & Emotional Ending */}
+      {/* Level 5 Real Photo Montage & Emotional Conclusion */}
       {state?.level5Montage && (
-        <Level5Montage onRestart={restartToMenu} />
+        <Level5Montage onRestart={backToMenu} />
       )}
 
       {/* achievement pop-ups */}

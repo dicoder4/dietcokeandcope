@@ -31,7 +31,7 @@ export const LEVEL5_CONFIG = {
     memoryCallbacks: [
         {
             who: 'anisha',
-            text: 'Remember those endless MSRIT gate shawarma runs and ice-cold Diet Cokes after brutal lectures? 🌯🥤',
+            text: 'Remember those endless talks near ESB and cold Diet Cokes? 🌯🥤',
         },
         {
             who: 'diya',
@@ -39,15 +39,15 @@ export const LEVEL5_CONFIG = {
         },
         {
             who: 'lord',
-            text: 'Hardcore gym sessions, building PCs brick by brick, and debugging C++ code until 3 AM! 🏋️‍♂️💻',
+            text: 'Hardcore gym sessions and debugging code until 3 AM! 🏋️‍♂️💻',
         },
         {
             who: 'chirantan',
-            text: 'Mastering the kitchen chaos and making that legendary chicken biryani! 🍗🔥',
+            text: 'Massaging tired shoulders and eating yummy SK rolls 🍗🔥',
         },
         {
             who: 'amogh',
-            text: 'Even if we complained we were vegetarian... it was the best memory ever! 😭❤️',
+            text: 'Even if I bully you, I still love you macha 😭❤️',
         },
     ],
 
@@ -172,7 +172,7 @@ export const LEVEL5_CONFIG = {
 
     // Final group photo card
     groupPhoto: {
-        src: '/montage/FGAI5036.JPEG',
+        src: '/montage/IMG_4315.jpg',
         title: 'THE FINAL GROUP PHOTO',
         lines: [
             'THANKS FOR PLAYING.',

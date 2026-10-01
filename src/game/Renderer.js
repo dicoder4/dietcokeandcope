@@ -222,6 +222,62 @@ function ensureImage(url) {
 }
 
 /**
+ * Draw a blurred, nostalgic background image with warm ambient vignette and sparkling lighting.
+ */
+function drawNostalgicBackground(ctx, bgImg, w, h, now, def) {
+  ctx.save()
+  const blurVal = def.bgBlur ?? 3.5
+  if (typeof ctx.filter !== 'undefined') {
+    ctx.filter = `blur(${blurVal}px) brightness(0.78) saturate(1.15)`
+  } else {
+    ctx.globalAlpha = 0.85
+  }
+
+  // Cover scaled background image fit
+  const imgW = bgImg.naturalWidth || bgImg.width || 1
+  const imgH = bgImg.naturalHeight || bgImg.height || 1
+  const scale = Math.max(w / imgW, h / imgH)
+  const destW = imgW * scale
+  const destH = imgH * scale
+  const destX = (w - destW) / 2
+  const destY = (h - destH) / 2
+
+  ctx.drawImage(bgImg, destX, destY, destW, destH)
+  ctx.restore()
+
+  // ---- Nostalgic Warm Vignette & Ambient Gradient ----
+  ctx.save()
+  const ambient = ctx.createLinearGradient(0, 0, 0, h)
+  ambient.addColorStop(0, 'rgba(21, 28, 46, 0.35)')
+  ambient.addColorStop(0.5, 'rgba(230, 107, 59, 0.15)')
+  ambient.addColorStop(1, 'rgba(45, 27, 54, 0.55)')
+  ctx.fillStyle = ambient
+  ctx.fillRect(0, 0, w, h)
+
+  // Radial vignette around edges
+  const vignette = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75)
+  vignette.addColorStop(0, 'rgba(0, 0, 0, 0)')
+  vignette.addColorStop(1, 'rgba(12, 8, 18, 0.65)')
+  ctx.fillStyle = vignette
+  ctx.fillRect(0, 0, w, h)
+
+  // Floating nostalgic golden memory sparkles
+  if (def.bgNostalgia) {
+    ctx.fillStyle = 'rgba(255, 214, 130, 0.6)'
+    for (let i = 0; i < 18; i++) {
+      const spx = (Math.sin(i * 91 + now * 0.3) * 0.5 + 0.5) * w
+      const spy = (Math.cos(i * 47 - now * 0.25) * 0.5 + 0.5) * h
+      const radius = 1.2 + Math.sin(now * 2 + i) * 0.8
+      ctx.globalAlpha = 0.3 + Math.sin(now * 1.8 + i * 2) * 0.3
+      ctx.beginPath()
+      ctx.arc(spx, spy, radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  ctx.restore()
+}
+
+/**
  * A continuous floor slab — the interior alternative to studded bricks.
  *
  * Level 1's ground IS LEGO, so drawing it brick-by-brick with studs is
@@ -1893,12 +1949,19 @@ export function render(ctx, world, view, state) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, w, h)
 
-  // ---- sky ----
+  // ---- sky & background image ----
   const sky = ctx.createLinearGradient(0, 0, 0, h)
   sky.addColorStop(0, world.def.skyTop ?? '#1b2440')
   sky.addColorStop(1, world.def.skyBottom ?? '#3c2f4d')
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, w, h)
+
+  if (world.def.bgImage) {
+    const bgImg = ensureImage(world.def.bgImage)
+    if (bgImg) {
+      drawNostalgicBackground(ctx, bgImg, w, h, now, world.def)
+    }
+  }
 
   const interior = world.def.interior === true
   const music = world.musicMode === true
@@ -1912,7 +1975,7 @@ export function render(ctx, world, view, state) {
   const shell = world.def.shell ?? 'metro'
   const rig = world.rigOnline === true
 
-  if (!interior) {
+  if (!interior && !world.def.bgImage) {
     // parallax clouds — a slow drift that sells daylight and depth
     ctx.save()
     ctx.globalAlpha = 0.5

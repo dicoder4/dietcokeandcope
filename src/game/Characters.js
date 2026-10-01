@@ -610,6 +610,24 @@ function drawStylizedHead(ctx, c, cx, cy, hr, facing, animT, talking, reaction) 
       dotEyes()
   }
 
+  // ---- spectacles / glasses (e.g. Aditri) ----
+  if (c.glasses) {
+    ctx.save()
+    ctx.strokeStyle = '#222630'
+    ctx.lineWidth = 1.4
+    for (const s of [-1, 1]) {
+      ctx.beginPath()
+      ctx.roundRect(cx + ex + s * 3.4 - 3.6, ey - 3.2, 7.2, 6, 2)
+      ctx.stroke()
+    }
+    // bridge
+    ctx.beginPath()
+    ctx.moveTo(cx + ex - 1, ey - 0.5)
+    ctx.lineTo(cx + ex + 1, ey - 0.5)
+    ctx.stroke()
+    ctx.restore()
+  }
+
   // ---- extra face furniture for the bigger reactions ----
   if (reaction === 'panic') {
     // sweat drop, flung off the side of the head
